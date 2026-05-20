@@ -24,6 +24,26 @@ estadísticas y relato en tiempo real. La simulación es representativa:
 un motor genera eventos con lógica probabilística y los propaga a los
 módulos del sistema automáticamente.
 
+## Alcance del sistema
+
+Incluye:
+
+-Registro y administración de equipos, jugadores y estadios
+-Configuración de partidos con selección de equipos, táctica inicial y modo de juego (amistoso / torneo)
+-Simulación representativa de un partido completo con generación de eventos por tramos (primer tiempo, entretiempo, segundo tiempo)
+-Cambio de táctica durante el partido desde la interfaz
+-Visualización en tiempo real de marcador, relato evento por evento y estadísticas del partido
+-Persistencia de equipos, jugadores y resultados de partidos en base de datos
+-Consulta de historial de partidos jugados
+
+No incluye:
+
+-Renderizado gráfico del campo de juego ni animaciones
+-Inteligencia artificial autónoma por jugador
+-Modo carrera, mercado de pases ni gestión económica de clubes
+-Integración con APIs externas de datos futbolísticos reales
+-Autenticación de usuarios ni roles de acceso
+
 ---
 
 ## ▶️ Instrucciones para ejecutar
