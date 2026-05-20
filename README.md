@@ -9,7 +9,7 @@ desarrollado como Trabajo Práctico Obligatorio para la materia de Patrones de D
 
 | Nombre | GitHub |
 |--------|--------|
-| ...    | ...    |
+| Agustin Perez Leal    | ...    |
 | ...    | ...    |
 | ...    | ...    |
 | ...    | ...    |
