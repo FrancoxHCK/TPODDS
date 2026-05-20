@@ -10,9 +10,9 @@ desarrollado como Trabajo Práctico Obligatorio para la materia de Patrones de D
 | Nombre | GitHub |
 |--------|--------|
 | Agustin Perez Leal    | ...    |
-| ...    | ...    |
-| ...    | ...    |
-| ...    | ...    |
+| Pedro Smith    | ...    |
+| Facundo Martinez Zorzi   | ...    |
+| Franco Brunello Mioni Bonucelli    | ...    |
 
 ---
 
