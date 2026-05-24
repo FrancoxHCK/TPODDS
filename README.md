@@ -1,4 +1,4 @@
-# ⚽ Football Simulation Game
+# ⚽ Juego de Simulación de Futbol
 
 Sistema de gestión y simulación de partidos de fútbol implementado en Java,
 desarrollado como Trabajo Práctico Obligatorio para la materia de Patrones de Diseño.
