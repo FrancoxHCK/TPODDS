@@ -1,4 +1,4 @@
 package videojuego.persistencia;
 
-public class EquipoDAO {
+public class JugadorDATA {
 }
