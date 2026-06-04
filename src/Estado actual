@@ -1,0 +1,43 @@
+ Flujo principal del Main
+
+  1. Setup de dominio
+  - Crea 6 Jugador y arma 2 Equipo (Argentina, Francia).
+  - Asigna táctica a cada uno via Strategy: TacticaOfensiva / TacticaDefensiva (definen probGol, probFalta, probLesion).
+  - Crea Estadio.
+
+  2. Configuración del partido (Fachada + Builder)
+  - ControladorPartido.configurarPartido(...) usa PartidoBuilder (fluido) para construir el Partido con marcador, estadísticas y relato (conMarcador/Estadisticas/Relato).
+  - El build() instancia el Partido y lo suscribe a los observadores Marcador, Estadisticas, RelatoDeportivo (patrón Observer).
+  - El Partido arranca en estado EstadoPrimerTiempo (patrón State).
+
+  3. Primer simularTramo() → Primer Tiempo
+  - EstadoPrimerTiempo.permiteSimular()==true → MotorSimulacion.simularTramo(partido):
+    - Genera 3–8 eventos. Por cada uno: elige atacante/defensor al azar, determinarEvento(...) tira ruleta sobre las probabilidades de las tácticas y devuelve TipoEvento (GOL, PENAL, FALTA, TARJETA_*,
+  LESION).
+    - Selecciona Jugador DISPONIBLE del equipo correspondiente (faltas/tarjetas al defensor).
+    - partido.registrarEvento(...) → agrega al historial y notificarObservadores (marcador suma goles, estadísticas cuenta, relato imprime).
+  - Luego partido.avanzarEstado() → pasa a EstadoEntretiempo.
+
+  4. Segundo simularTramo() → Entretiempo (sin simular)
+  - EstadoEntretiempo.permiteSimular()==false → solo avanzarEstado() → EstadoSegundoTiempo.
+
+  5. Tercer simularTramo() → Segundo Tiempo + cierre
+  - Simula el segundo tramo (mismo motor, minutoBase ya +45).
+  - avanzarEstado() → EstadoFinalizado.
+  - El controlador detecta getNombre()=="Finalizado" y llama new PartidoDATA().guardar(partido) → lo persiste en ConexionDB (Singleton in-memory).
+
+  6. Consulta de historial
+  - new PartidoDATA().obtenerTodos() lee la misma lista del Singleton e imprime el tamaño.
+
+  Patrones en juego: Facade (ControladorPartido), Builder (PartidoBuilder/IBuilder), State (IEstadoPartido + 4 estados), Strategy (ITactica), Observer (IObservadorPartido + 3 observadores), Singleton +
+   DAO (ConexionDB + PartidoDATA).
+
+
+
+   Agregar: (GUIARSE DE LA FASE 1, mirar requisitos)
+  El usuario debe poder:
+  - Elegir los equipos
+  - Elegir las tacticas en tiempo real (No que se eligan automaticamente)
+  - Debe poder elegir el tipo de partido, amistoso o torneo
+ Dame un handoff del funcionamiento actual del sistema, para poder pasarselo a claude chat y con el definir las instrucciones para agregar las funcionalidades y corregir los errores que faltan. Esto
+  comparando el handoff con el alcance y funcionalidades definidos previamente.
