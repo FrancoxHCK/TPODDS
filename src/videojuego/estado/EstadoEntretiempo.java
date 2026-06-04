@@ -21,4 +21,5 @@ public class EstadoEntretiempo implements IEstadoPartido {
     @Override
     public boolean permiteSimular() {
         return false;
+    }
 }
