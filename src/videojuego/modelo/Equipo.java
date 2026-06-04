@@ -1,6 +1,7 @@
 package videojuego.modelo;
 
 import videojuego.tactica.ITactica;
+import videojuego.tactica.TacticaEquilibrada;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -12,7 +13,7 @@ public class Equipo {
 
     public Equipo(String nombre) {
         this.nombre = nombre;
-        this.tactica = tactica;
+        this.tactica = new TacticaEquilibrada();
         this.jugadores = new ArrayList<>();
     }
 

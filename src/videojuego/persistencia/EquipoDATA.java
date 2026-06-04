@@ -9,14 +9,14 @@ import java.util.List;
 public class EquipoDATA {
     private final ConexionDB db;
 
-    public EquipoDATA {
+    public EquipoDATA() {
         this.db = ConexionDB.getInstancia();
     }
 
     public void guardarEquipo(Equipo equipo) {
         boolean yaExiste = db.getEquipos().stream()
             .anyMatch(e -> e.getNombre().equalsIgnoreCase(equipo.getNombre()));
-        if (yaExiste) {
+        if (!yaExiste) {
             db.getEquipos().add(equipo);
         }
     }

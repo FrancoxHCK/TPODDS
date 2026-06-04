@@ -19,7 +19,7 @@ public class Partido {
         this.equipoVisitante = visitante;
         this.estadio = estadio;
         this.modoJuego = modoJuego;
-        this.estadoActual = new EstadoPrimerTiempo(this);
+        this.estadoActual = new EstadoPrimerTiempo();
         this.observadores = new ArrayList<>();
         this.eventos = new ArrayList<>();
     }

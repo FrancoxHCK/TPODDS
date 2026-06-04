@@ -25,18 +25,12 @@ public class RelatoDeportivo implements IObservadorPartido {
         int min = evento.getMinuto();
 
         return switch (evento.getTipo()) {
-            case GOL -> "Min " + min + " - GOL de " + jugador +
-                    " (" + equipo + ")";
-            case FALTA -> "Min " + min + " - Falta cometida por
-            " + jugador;
-            case TARJETA_AMARILLA -> "Min " + min + " - Tarjeta
-            AMARILLA para " + jugador;
-            case TARJETA_ROJA -> "Min " + min + " - Tarjeta
-            ROJA para " + jugador + ". Se va expulsado.";
-            case LESION -> "Min " + min + " - " + jugador + "
-            sale lesionado del campo.";
-            case PENAL -> "Min " + min + " - PENAL a favor de "
-                    + equipo + ". Ejecuta " + jugador;
+            case GOL -> "Min " + min + " - GOL de " + jugador + " (" + equipo + ")";
+            case FALTA -> "Min " + min + " - Falta cometida por " + jugador;
+            case TARJETA_AMARILLA -> "Min " + min + " - Tarjeta AMARILLA para " + jugador;
+            case TARJETA_ROJA -> "Min " + min + " - Tarjeta ROJA para " + jugador + ". Se va expulsado.";
+            case LESION -> "Min " + min + " - " + jugador + " sale lesionado del campo.";
+            case PENAL -> "Min " + min + " - PENAL a favor de " + equipo + ". Ejecuta " + jugador;
         };
     }
 

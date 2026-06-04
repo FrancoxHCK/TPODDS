@@ -4,6 +4,7 @@ import videojuego.builder.PartidoBuilder;
 import videojuego.modelo.Equipo;
 import videojuego.modelo.Estadio;
 import videojuego.modelo.Partido;
+import videojuego.persistencia.PartidoDATA;
 import videojuego.simulacion.MotorSimulacion;
 
 public class ControladorPartido {
@@ -35,9 +36,13 @@ public class ControladorPartido {
         if (partido.getEstadoActual().permiteSimular()) {
             motor.simularTramo(partido);
             partido.avanzarEstado();
+            // Si después de avanzar quedó finalizado, lo guardamos
+            if (!partido.getEstadoActual().permiteSimular() &&
+                    partido.getEstadoActual().getNombre().equals("Finalizado")) {
+                new PartidoDATA().guardar(partido);
+            }
         } else {
-            System.out.println("No se puede simular en el estado: "
-                    + partido.getEstadoActual().getNombre());
+            partido.avanzarEstado(); // avanza el entretiempo sin simular
         }
     }
 

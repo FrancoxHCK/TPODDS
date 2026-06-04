@@ -1,6 +1,6 @@
-package videojuego.ui;
+//package videojuego.ui;
 
-import javafx.application.Application;
+//import javafx.application.Application;
 
-public class MainApp extends Application {
-}
+//public class MainApp extends Application {
+//}

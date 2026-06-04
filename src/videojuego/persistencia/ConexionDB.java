@@ -15,7 +15,7 @@ public class ConexionDB {
     private final List<Jugador> jugadores;
     private final List<Partido> partidos;
 
-    private conexionDB() {
+    private ConexionDB() {
         this.equipos = new ArrayList<>();
         this.jugadores = new ArrayList<>();
         this.partidos = new ArrayList<>();
