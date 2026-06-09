@@ -3,6 +3,7 @@
 package videojuego.persistencia;
 
 import videojuego.modelo.Equipo;
+import videojuego.modelo.Estadio;
 import videojuego.modelo.Jugador;
 import videojuego.modelo.Partido;
 import java.util.ArrayList;
@@ -14,11 +15,13 @@ public class ConexionDB {
     private final List<Equipo> equipos;
     private final List<Jugador> jugadores;
     private final List<Partido> partidos;
+    private final List<Estadio> estadios;
 
     private ConexionDB() {
         this.equipos = new ArrayList<>();
         this.jugadores = new ArrayList<>();
         this.partidos = new ArrayList<>();
+        this.estadios = new ArrayList<>();
     }
 
     public static ConexionDB getInstancia() {
@@ -31,6 +34,7 @@ public class ConexionDB {
     public List<Equipo> getEquipos() { return equipos; }
     public List<Jugador> getJugadores() { return jugadores; }
     public List<Partido> getPartidos() { return partidos; }
+    public List<Estadio> getEstadios() { return estadios; }
 
 }
 //  Por qué: Una sola instancia garantiza que todos los DAOs lean y escriban en las mismas listas. Simula la "sesión de base de datos".

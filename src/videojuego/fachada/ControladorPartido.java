@@ -8,6 +8,7 @@ import videojuego.modelo.Partido;
 import videojuego.observador.Estadisticas;
 import videojuego.observador.Marcador;
 import videojuego.persistencia.EquipoDATA;
+import videojuego.persistencia.EstadioDATA;
 import videojuego.persistencia.JugadorDATA;
 import videojuego.persistencia.PartidoDATA;
 import videojuego.simulacion.MotorSimulacion;
@@ -103,6 +104,14 @@ public class ControladorPartido {
 
     public void registrarJugador(Jugador jugador) {
         new JugadorDATA().guardar(jugador);
+    }
+
+    public void registrarEstadio(Estadio estadio) {
+        new EstadioDATA().guardar(estadio);
+    }
+
+    public List<Estadio> obtenerEstadios() {
+        return new EstadioDATA().obtenerTodos();
     }
 
     public Partido getPartido() {
