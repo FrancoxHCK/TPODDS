@@ -19,9 +19,12 @@ public class Partido {
         this.equipoVisitante = visitante;
         this.estadio = estadio;
         this.modoJuego = modoJuego;
-        this.estadoActual = new EstadoPrimerTiempo();
         this.observadores = new ArrayList<>();
         this.eventos = new ArrayList<>();
+        this.estadoActual = new EstadoPrimerTiempo();
+        // Se invoca iniciar() para que el primer tiempo sea consistente con los demas
+        // estados (que llaman iniciar() al transicionar via setEstado()).
+        this.estadoActual.iniciar(this);
     }
 
     public void agregarObservador(IObservadorPartido observador) {

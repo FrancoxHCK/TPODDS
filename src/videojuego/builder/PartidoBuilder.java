@@ -16,6 +16,11 @@ public class PartidoBuilder implements IBuilder<Partido> {
     private boolean conEstadisticas = false;
     private boolean conRelato = false;
 
+    // Referencias retenidas a los observadores para que la fachada pueda accederlos
+    // despues del build() (sin estas refs, marcador y estadisticas quedaban inaccesibles).
+    private Marcador marcador;
+    private Estadisticas estadisticas;
+
     public PartidoBuilder setEquipoLocal(Equipo equipo) {
         this.equipoLocal = equipo;
         return this;
@@ -61,13 +66,26 @@ public class PartidoBuilder implements IBuilder<Partido> {
 
         Partido partido = new Partido(equipoLocal, equipoVisitante, estadio, modoJuego);
 
-        if (conMarcador)
-            partido.agregarObservador(new Marcador(equipoLocal.getNombre(), equipoVisitante.getNombre()));
-        if (conEstadisticas)
-            partido.agregarObservador(new Estadisticas());
+        if (conMarcador) {
+            this.marcador = new Marcador(equipoLocal.getNombre(), equipoVisitante.getNombre());
+            partido.agregarObservador(this.marcador);
+        }
+        if (conEstadisticas) {
+            this.estadisticas = new Estadisticas();
+            partido.agregarObservador(this.estadisticas);
+        }
         if (conRelato)
             partido.agregarObservador(new RelatoDeportivo());
 
         return partido;
+    }
+
+    // Acceso a los observadores creados en el ultimo build().
+    public Marcador getMarcador() {
+        return marcador;
+    }
+
+    public Estadisticas getEstadisticas() {
+        return estadisticas;
     }
 }
