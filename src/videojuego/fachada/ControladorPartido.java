@@ -1,6 +1,7 @@
 package videojuego.fachada;
 
 import videojuego.builder.PartidoBuilder;
+import videojuego.estado.EstadoFinalizado;
 import videojuego.modelo.Equipo;
 import videojuego.modelo.Estadio;
 import videojuego.modelo.Jugador;
@@ -12,10 +13,12 @@ import videojuego.persistencia.EstadioDATA;
 import videojuego.persistencia.JugadorDATA;
 import videojuego.persistencia.PartidoDATA;
 import videojuego.simulacion.MotorSimulacion;
+import videojuego.tactica.ITactica;
 
 import java.util.List;
 
-public class ControladorPartido {
+public class
+ControladorPartido {
 
     private Partido partido;
     private MotorSimulacion motor;
@@ -70,6 +73,38 @@ public class ControladorPartido {
         } else {
             partido.avanzarEstado(); // avanza el entretiempo sin simular
         }
+    }
+
+    // Cambia la tactica de un equipo en tiempo real. El MotorSimulacion lee
+    // equipo.getTactica() al generar cada evento, asi que el cambio impacta de
+    // inmediato en los tramos que resten por simular.
+    public void cambiarTactica(Equipo equipo, ITactica nuevaTactica) {
+        if (partido != null && partido.getEstadoActual() instanceof EstadoFinalizado) {
+            throw new IllegalStateException(
+                    "No se puede cambiar la tactica en un partido finalizado.");
+        }
+        equipo.cambiarTactica(nuevaTactica);
+    }
+
+    // Imprime el historial de partidos persistido. Por cada partido muestra el
+    // resumen (equipos + resultado + eventos) y el estado final.
+    public void mostrarHistorial() {
+        List<Partido> historial = new PartidoDATA().obtenerTodos();
+        if (historial.isEmpty()) {
+            System.out.println("No hay partidos en el historial.");
+            return;
+        }
+        System.out.println("=== Historial de Partidos ===");
+        for (int i = 0; i < historial.size(); i++) {
+            Partido p = historial.get(i);
+            System.out.println((i + 1) + ". " + p.getResumenTexto()
+                    + " | Estado: " + p.getEstadoActual().getNombre());
+        }
+    }
+
+    // Expone el historial crudo para que la UI lo consuma sin depender de System.out.
+    public List<Partido> obtenerHistorial() {
+        return new PartidoDATA().obtenerTodos();
     }
 
     public String getResultado() {

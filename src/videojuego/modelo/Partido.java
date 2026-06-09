@@ -51,6 +51,25 @@ public class Partido {
         nuevoEstado.iniciar(this);
     }
 
+    // Resumen de una linea: equipos, resultado (goles por GOL/PENAL) y total de eventos.
+    // El conteo de goles replica la regla del Marcador: GOL o PENAL suma al equipo del evento.
+    public String getResumenTexto() {
+        int golesLocal = 0;
+        int golesVisitante = 0;
+        for (EventoDeportivo evento : eventos) {
+            if (evento.getTipo() == TipoEvento.GOL || evento.getTipo() == TipoEvento.PENAL) {
+                if (evento.getEquipo().getNombre().equals(equipoLocal.getNombre())) {
+                    golesLocal++;
+                } else {
+                    golesVisitante++;
+                }
+            }
+        }
+        return equipoLocal.getNombre() + " " + golesLocal + " - " + golesVisitante + " "
+                + equipoVisitante.getNombre()
+                + " | Eventos: " + eventos.size();
+    }
+
     public Equipo getEquipoLocal() { return equipoLocal; }
     public Equipo getEquipoVisitante() { return equipoVisitante; }
     public Estadio getEstadio() { return estadio; }
