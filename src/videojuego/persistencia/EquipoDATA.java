@@ -13,7 +13,7 @@ public class EquipoDATA {
         this.db = ConexionDB.getInstancia();
     }
 
-    public void guardarEquipo(Equipo equipo) {
+    public void guardar(Equipo equipo) {
         boolean yaExiste = db.getEquipos().stream()
             .anyMatch(e -> e.getNombre().equalsIgnoreCase(equipo.getNombre()));
         if (!yaExiste) {

@@ -3,11 +3,16 @@ package videojuego.fachada;
 import videojuego.builder.PartidoBuilder;
 import videojuego.modelo.Equipo;
 import videojuego.modelo.Estadio;
+import videojuego.modelo.Jugador;
 import videojuego.modelo.Partido;
 import videojuego.observador.Estadisticas;
 import videojuego.observador.Marcador;
+import videojuego.persistencia.EquipoDATA;
+import videojuego.persistencia.JugadorDATA;
 import videojuego.persistencia.PartidoDATA;
 import videojuego.simulacion.MotorSimulacion;
+
+import java.util.List;
 
 public class ControladorPartido {
 
@@ -29,6 +34,20 @@ public class ControladorPartido {
                 .conEstadisticas()
                 .conRelato();
         this.partido = this.builder.build();
+
+        // Al configurar, persistimos ambos equipos y sus jugadores en memoria.
+        persistirEquipoConJugadores(local);
+        persistirEquipoConJugadores(visitante);
+    }
+
+    // Helper privado: guarda un equipo y todos sus jugadores en sus respectivos DAOs.
+    // Reutilizado por configurarPartido() y registrarEquipo().
+    private void persistirEquipoConJugadores(Equipo equipo) {
+        new EquipoDATA().guardar(equipo);
+        List<Jugador> jugadores = equipo.getJugadores();
+        for (int i = 0; i < jugadores.size(); i++) {
+            new JugadorDATA().guardar(jugadores.get(i));
+        }
     }
 
     // Antes este metodo llamaba avanzarEstado(), lo que salteaba el primer tiempo.
@@ -65,6 +84,25 @@ public class ControladorPartido {
 
     public Estadisticas getEstadisticas() {
         return builder != null ? builder.getEstadisticas() : null;
+    }
+
+    // === Gestion de equipos y jugadores (delega en los DAOs) ===
+
+    public List<Equipo> obtenerEquipos() {
+        return new EquipoDATA().obtenerTodos();
+    }
+
+    public List<Jugador> obtenerJugadores() {
+        return new JugadorDATA().obtenerTodos();
+    }
+
+    // Registra un equipo y, ademas, persiste todos sus jugadores.
+    public void registrarEquipo(Equipo equipo) {
+        persistirEquipoConJugadores(equipo);
+    }
+
+    public void registrarJugador(Jugador jugador) {
+        new JugadorDATA().guardar(jugador);
     }
 
     public Partido getPartido() {
