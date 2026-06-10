@@ -2,13 +2,13 @@
 
 Documento para retomar el proyecto en otra sesión. Describe el **estado real del código** (no el deseado), los patrones aplicados, y el **gap entre lo implementado y el alcance definido**. Java puro, sin dependencias externas, persistencia en memoria.
 
-> **Última actualización:** se completaron las **Tareas 1, 2 y 3** del plan (ver sección 9). Resumen: cerrados los bugs B1, B2, B3 y B8; activados los DAOs de Equipo y Jugador; creado el DAO de Estadio. Pendientes: Tareas 4, 5 y 6.
+> **Última actualización:** se completó la **Tarea 6 = Fase 3 (última)**: `src/Main.java` es ahora un **menú de consola interactivo** (`Scanner`) que reemplaza la demo hardcodeada. Con esto **las 6 tareas del plan están terminadas** y los 7 requisitos del alcance quedan cubiertos (ver secciones 4 y 9). Verificado: **compila OK** + corrida end-to-end (registrar equipos/jugadores → configurar → jugar con cambio de táctica en el entretiempo → ver historial). Único punto de entrada = `Main` operando siempre sobre la fachada `ControladorPartido`. Pendientes únicamente los ítems **opcionales** (B4 amistoso/torneo, B6 README, B7 stubs `ui`, B9 default FALTA).
 
 ---
 
 ## 1. Cómo se ejecuta hoy
 
-- **Todavía no hay menú interactivo.** El único punto de entrada funcional sigue siendo `src/Main.java`, una demo de consola con datos **hardcodeados** (el menú con `Scanner` es la Tarea 6, pendiente).
+- **`src/Main.java` es un menú de consola interactivo** (`Scanner`), única vía de entrada. Opera todo a través de la fachada `ControladorPartido` (nunca instancia DAOs). Menú principal: 1) Gestión de equipos/jugadores, 2) Configurar y jugar partido, 3) Ver historial, 4) Salir.
 - Compilar/ejecutar (zsh, el glob recursivo `**` no siempre funciona, usar `find`):
   ```bash
   rm -rf bin && mkdir bin
@@ -16,8 +16,9 @@ Documento para retomar el proyecto en otra sesión. Describe el **estado real de
   javac -d bin @sources.txt
   java -cp bin Main
   ```
-- `Main` hace: crea 6 jugadores y 2 equipos (Argentina ofensiva / Francia defensiva), crea un estadio, configura el partido vía `ControladorPartido`, y llama `simularTramo()` 3 veces (1er tiempo → entretiempo → 2do tiempo). Al finalizar persiste el partido y muestra el tamaño del historial.
-- **Novedad (Tarea 2):** al llamar `configurarPartido(...)`, ahora ambos equipos y todos sus jugadores quedan **persistidos** automáticamente en `ConexionDB` vía sus DAOs.
+- **Flujo del menú:** el usuario registra equipos (cada alta crea además su estadio), agrega jugadores (número de camiseta autoasignado por orden), configura un partido eligiendo local/visitante/estadio/tácticas/modo (con el estado de la selección visible en pantalla), y lo juega por tramos con **entretiempo interactivo** (`=== ENTRETIEMPO ===` → cambiar táctica local/visitante o continuar). Al finalizar el partido se persiste solo y se puede consultar el historial desde el menú.
+- Internamente, `configurarPartido(...)` también persiste ambos equipos y todos sus jugadores en `ConexionDB` vía los DAOs (todo encapsulado tras `ControladorPartido`).
+- **Recorrido del partido (máquina de estados):** un partido completo son **3** llamadas a `simularTramo()` — 1er tiempo (simula) → entretiempo (avanza sin simular) → 2do tiempo (simula y finaliza/guarda). El menú las encadena: una para el 1er tiempo, y tras el entretiempo dos seguidas para dejar atrás el entretiempo y jugar el 2do tiempo.
 
 ---
 
@@ -71,18 +72,18 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta
 
 | # | Requisito del alcance (README "Incluye") | Estado | Detalle |
 |---|---|---|---|
-| 1 | Registro y administración de equipos, jugadores y estadios | 🟡 | DAOs de `Equipo`/`Jugador`/`Estadio` existen y **ya se invocan** desde la fachada (`registrar/obtener...`, persistencia en `configurarPartido`). Falta la **UI de alta/baja** (Tarea 6); hoy los datos siguen viniendo hardcodeados de `Main`. |
-| 2 | Configuración de partido: elegir equipos, táctica inicial y modo (amistoso/torneo) | 🟡 | El builder y la fachada aceptan los datos, pero el usuario aún no elige nada (falta menú). `modoJuego` es un `String` sin efecto en la lógica (B4). |
+| 1 | Registro y administración de equipos, jugadores y estadios | ✅ | El menú permite **alta y consulta** de equipos, jugadores y estadios vía la fachada (`registrar/obtener...`). Baja/edición existen en los DAOs (`eliminar`) pero no se expusieron en el menú (no pedido explícitamente). |
+| 2 | Configuración de partido: elegir equipos, táctica inicial y modo (amistoso/torneo) | ✅ | El submenú "Configurar y jugar" deja elegir local/visitante/estadio, táctica inicial de cada equipo y modo. El `modoJuego` se elige y se guarda, pero **aún no altera la lógica** (B4, opcional). |
 | 3 | Simulación representativa por tramos | ✅ | Motor + State funcionan. |
-| 4 | Cambio de táctica DURANTE el partido desde la interfaz | 🟡 | El motor ya lee la táctica en tiempo real, pero **falta `cambiarTactica(equipo, tactica)` en `ControladorPartido`** y el punto de interacción entre tramos (Tarea 4 + Tarea 6). |
-| 5 | Visualización en tiempo real de marcador, relato y estadísticas | 🟡 | El **relato** se imprime. `Marcador` y `Estadisticas` ahora **son accesibles** (`getMarcador()`/`getEstadisticas()`, fix B1), pero falta el menú que los muestre entre tramos (Tarea 5/6). |
+| 4 | Cambio de táctica DURANTE el partido desde la interfaz | ✅ | El menú de **entretiempo** invoca `cambiarTactica(Equipo, ITactica)` (con guarda de partido finalizado); el motor lee la táctica en tiempo real, así que impacta en el 2do tiempo. |
+| 5 | Visualización en tiempo real de marcador, relato y estadísticas | ✅ | El **relato** se imprime evento por evento; el menú muestra **marcador** (`getMarcador()`) y **estadísticas** (`getEstadisticas()`) al cierre del 1er tiempo y al final. |
 | 6 | Persistencia de equipos, jugadores y resultados | ✅ | Se persisten partidos, equipos, jugadores y estadios (en memoria, Singleton). Se pierde al cerrar — aceptado por consigna. |
-| 7 | Consulta de historial | 🟡 | `PartidoDATA.obtenerTodos()`/`buscarPorEquipo()` funcionan, pero `Main` solo imprime el `.size()`. Falta `mostrarHistorial()`/`obtenerHistorial()`/`getResumenTexto()` (Tarea 5). |
+| 7 | Consulta de historial | ✅ | El menú llama `mostrarHistorial()` (sobre `obtenerHistorial()`/`getResumenTexto()`): lista cada partido con resultado, total de eventos y estado final. |
 
 ### Requisitos extra pedidos explícitamente
-- 🟡 **Elegir los equipos** — la fachada ya lo soporta; falta el menú (Tarea 6).
-- 🟡 **Elegir las tácticas en tiempo real** — falta `cambiarTactica` en fachada (Tarea 4) + menú.
-- ❌ **Elegir tipo de partido: amistoso o torneo** — se podrá elegir en el menú, pero `modoJuego` sigue sin comportamiento (B4).
+- ✅ **Elegir los equipos** — el menú lista los registrados y permite elegir local y visitante.
+- ✅ **Elegir las tácticas en tiempo real** — el menú de entretiempo dispara `cambiarTactica()` por equipo; el motor la aplica de inmediato.
+- 🟡 **Elegir tipo de partido: amistoso o torneo** — ya se elige en el menú (1=Amistoso, 2=Torneo), pero `modoJuego` sigue sin comportamiento diferenciado (B4, opcional).
 
 ---
 
@@ -93,10 +94,10 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta
 - ✅ **B2 — `iniciar()` del primer tiempo nunca corría.** El constructor de `Partido` ahora llama `estadoActual.iniciar(this)` tras asignar el estado.
 - ✅ **B3 — `iniciarPartido()` código muerto/peligroso.** Convertido en no-op con comentario explicativo (ya no llama `avanzarEstado()`).
 - ✅ **B8 — `model/Clase.java`.** Eliminado (junto con el paquete `model` vacío).
+- ✅ **B5 — Sin punto de interacción entre tramos.** Resuelto por el menú de **entretiempo** del `Main` interactivo: tras el 1er tiempo se ofrece cambiar tácticas o continuar antes de simular el 2do tiempo.
 
 ### Pendientes
-- **B4 — `modoJuego` (amistoso/torneo) no tiene comportamiento.** Es un String que se guarda y no afecta nada. Un "torneo" real implicaría fixture/tabla/llaves; hoy no existe.
-- **B5 — Sin punto de interacción entre tramos.** `Main` encadena los `simularTramo()` sin pausa. La arquitectura lo permite; lo resolverá el menú (Tarea 6) con su entretiempo interactivo.
+- **B4 — `modoJuego` (amistoso/torneo) no tiene comportamiento.** Es un String que se elige y se guarda pero no afecta nada. Un "torneo" real implicaría fixture/tabla/llaves; hoy no existe.
 - **B6 — Drift de documentación.** El README nombra `ConstructorPartido` e `IObservador`, pero el código usa `PartidoBuilder` e `IObservadorPartido`. Unificar nombres.
 - **B7 — Capa `ui` y `MainApp` vacías.** Los 5 controladores `ui` son clases vacías y `MainApp` está comentado (JavaFX). Decisión tomada: **el enfoque es consola** (menú en `Main`, Tarea 6); los stubs pueden borrarse más adelante.
 - **B9 — Default silencioso en `determinarEvento()`.** Si no cae en ningún rango devuelve `FALTA`, lo que puede sesgar el conteo. Revisar si es intencional.
@@ -115,10 +116,12 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta
 
 ## 7. Qué falta construir (resumen accionable)
 
-1. **Tarea 4 — Cambio de táctica en tiempo real**: agregar `cambiarTactica(Equipo, ITactica)` en `ControladorPartido`, lanzando error si el partido está `EstadoFinalizado`. (El motor ya lee la táctica en vivo.)
-2. **Tarea 5 — Historial con detalle**: `mostrarHistorial()`, `obtenerHistorial()` en la fachada y `getResumenTexto()` en `Partido` (equipos, resultado contado desde los eventos GOL/PENAL, cantidad de eventos, estado final).
-3. **Tarea 6 — Menú de consola interactivo**: reemplazar `Main` por un menú con `Scanner` (gestión de equipos/jugadores, configurar y jugar partido con entretiempo interactivo, ver historial). Única fachada = `ControladorPartido`.
-4. **(Opcional / fuera de las 6 tareas)** Dar significado a amistoso vs torneo (B4); sincronizar README (B6); decidir si se borran los stubs `ui` (B7); revisar default `FALTA` (B9).
+**Las 6 tareas del plan están completas** y verificadas. El simulador se usa de punta a punta desde el menú de consola (`Main` → `ControladorPartido`). Solo quedan ítems **opcionales**, ninguno exigido por la consigna:
+
+1. **B4 — amistoso vs torneo con comportamiento.** Hoy `modoJuego` se elige y se guarda, pero no cambia la lógica. Un "torneo" real implicaría fixture/tabla/llaves.
+2. **B6 — Sincronizar el README.** Nombra `ConstructorPartido`/`IObservador`; el código usa `PartidoBuilder`/`IObservadorPartido`.
+3. **B7 — Stubs `ui`.** Los 5 controladores JavaFX y `MainApp` siguen vacíos; al haberse elegido el enfoque consola, pueden borrarse.
+4. **B9 — Default `FALTA` en `determinarEvento()`.** Revisar si el fallback sesga el conteo de eventos.
 
 ---
 
@@ -139,6 +142,8 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta
 | 1 | Corregir bugs críticos (B1, B2, B3) + limpieza (B8) | ✅ Hecho y verificado (compila + `Main` corre) |
 | 2 | Activar DAOs de Equipo y Jugador (unificar `guardar()`, cablear en fachada, métodos `registrar/obtener`) | ✅ Hecho y verificado (test ad-hoc: 3 equipos / 5 jugadores) |
 | 3 | Agregar `EstadioDATA` (+ lista en `ConexionDB`, métodos en fachada) | ✅ Hecho y verificado (test ad-hoc: dedup + `buscarPorNombre`) |
-| 4 | Cambio de táctica en tiempo real (`cambiarTactica` en fachada con guarda de finalizado) | ⬜ Pendiente |
-| 5 | Mejorar historial (`mostrarHistorial`/`obtenerHistorial`/`getResumenTexto`) | ⬜ Pendiente |
-| 6 | Menú de consola interactivo (reemplazar `Main`) | ⬜ Pendiente |
+| 4 | Cambio de táctica en tiempo real (`cambiarTactica` en fachada con guarda de finalizado) | ✅ Hecho y verificado (compila; guarda lanza `IllegalStateException` si finalizado) |
+| 5 | Mejorar historial (`mostrarHistorial`/`obtenerHistorial`/`getResumenTexto`) | ✅ Hecho y verificado (compila; resultado contado desde eventos GOL/PENAL) |
+| 6 | Menú de consola interactivo (reemplazar `Main`) — **Fase 3 (última)** | ✅ Hecho y verificado (compila + corrida end-to-end por pipe: gestión → configurar → jugar con cambio de táctica en entretiempo → historial) |
+
+> **Plan completo.** Las 6 tareas (Fases 1-3) están terminadas. Lo único restante son los 4 ítems opcionales de la sección 7.
