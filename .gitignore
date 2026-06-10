@@ -28,3 +28,10 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### Proyecto ###
+# Base de datos SQLite generada en runtime (se recrea al ejecutar)
+simulador.db
+*.db
+# Lista de fuentes generada por el comando de compilacion
+sources.txt

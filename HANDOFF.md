@@ -1,23 +1,32 @@
 # Handoff — Simulador de Partidos de Fútbol (TPO Patrones de Diseño)
 
-Documento para retomar el proyecto en otra sesión. Describe el **estado real del código** (no el deseado), los patrones aplicados, y el **gap entre lo implementado y el alcance definido**. Java puro, sin dependencias externas, persistencia en memoria.
+Documento para retomar el proyecto en otra sesión. Describe el **estado real del código** (no el deseado), los patrones aplicados, y el **gap entre lo implementado y el alcance definido**. Java 21. **Persistencia: SQLite vía JDBC** (única dependencia externa: el driver `sqlite-jdbc` en `lib/`).
 
-> **Última actualización:** se completó la **Tarea 6 = Fase 3 (última)**: `src/Main.java` es ahora un **menú de consola interactivo** (`Scanner`) que reemplaza la demo hardcodeada. Con esto **las 6 tareas del plan están terminadas** y los 7 requisitos del alcance quedan cubiertos (ver secciones 4 y 9). Verificado: **compila OK** + corrida end-to-end (registrar equipos/jugadores → configurar → jugar con cambio de táctica en el entretiempo → ver historial). Único punto de entrada = `Main` operando siempre sobre la fachada `ControladorPartido`. Pendientes únicamente los ítems **opcionales** (B4 amistoso/torneo, B6 README, B7 stubs `ui`, B9 default FALTA).
+> **Última actualización:** se migró la **capa de persistencia de listas en memoria a SQLite/JDBC** (ver sección 10). `ConexionDB` ahora abre/posee una `Connection` a `simulador.db` y crea el esquema; los 4 DAOs reescribieron sus cuerpos con `PreparedStatement`. **La regla de oro se cumplió: nada fuera del paquete `persistencia` cambió** (modelo, fachada, observadores, `Main` intactos). Verificado end-to-end con **dos corridas separadas** (jugar+guardar; reiniciar JVM y leer todo desde la BD). Antes de esto, las 6 tareas del plan y el menú interactivo ya estaban completos.
 
 ---
 
 ## 1. Cómo se ejecuta hoy
 
 - **`src/Main.java` es un menú de consola interactivo** (`Scanner`), única vía de entrada. Opera todo a través de la fachada `ControladorPartido` (nunca instancia DAOs). Menú principal: 1) Gestión de equipos/jugadores, 2) Configurar y jugar partido, 3) Ver historial, 4) Salir.
-- Compilar/ejecutar (zsh, el glob recursivo `**` no siempre funciona, usar `find`):
+- **Requiere el driver SQLite** en el classpath: `lib/sqlite-jdbc-3.42.0.0.jar` (versionado en el repo). El separador de classpath es `;` en Windows y `:` en Linux/Mac.
+- Compilar/ejecutar en **Windows (PowerShell)**:
+  ```powershell
+  Remove-Item -Recurse -Force bin; New-Item -ItemType Directory bin | Out-Null
+  Get-ChildItem -Recurse src -Filter *.java | ForEach-Object FullName > sources.txt
+  javac -cp "lib\sqlite-jdbc-3.42.0.0.jar" -d bin "@sources.txt"
+  java -cp "bin;lib\sqlite-jdbc-3.42.0.0.jar" Main
+  ```
+- Compilar/ejecutar en **Linux/Mac (bash)**:
   ```bash
   rm -rf bin && mkdir bin
   find src -name "*.java" > sources.txt
-  javac -d bin @sources.txt
-  java -cp bin Main
+  javac -cp lib/sqlite-jdbc-3.42.0.0.jar -d bin @sources.txt
+  java -cp "bin:lib/sqlite-jdbc-3.42.0.0.jar" Main
   ```
+- Al primer arranque se crea `simulador.db` en la raíz (gitignored, se regenera). La compilación no necesita el driver (no se importa `org.sqlite.*`), pero la ejecución sí (el driver se registra por `ServiceLoader` en runtime).
 - **Flujo del menú:** el usuario registra equipos (cada alta crea además su estadio), agrega jugadores (número de camiseta autoasignado por orden), configura un partido eligiendo local/visitante/estadio/tácticas/modo (con el estado de la selección visible en pantalla), y lo juega por tramos con **entretiempo interactivo** (`=== ENTRETIEMPO ===` → cambiar táctica local/visitante o continuar). Al finalizar el partido se persiste solo y se puede consultar el historial desde el menú.
-- Internamente, `configurarPartido(...)` también persiste ambos equipos y todos sus jugadores en `ConexionDB` vía los DAOs (todo encapsulado tras `ControladorPartido`).
+- Internamente, `configurarPartido(...)` también persiste ambos equipos y todos sus jugadores en **SQLite** vía los DAOs (todo encapsulado tras `ControladorPartido`).
 - **Recorrido del partido (máquina de estados):** un partido completo son **3** llamadas a `simularTramo()` — 1er tiempo (simula) → entretiempo (avanza sin simular) → 2do tiempo (simula y finaliza/guarda). El menú las encadena: una para el 1er tiempo, y tras el entretiempo dos seguidas para dejar atrás el entretiempo y jugar el 2do tiempo.
 
 ---
@@ -33,7 +42,7 @@ Documento para retomar el proyecto en otra sesión. Describe el **estado real de
 | `tactica` | `ITactica`, `TacticaOfensiva`, `TacticaDefensiva`, `TacticaEquilibrada` | **Strategy** |
 | `observador` | `IObservadorPartido`, `Marcador`, `Estadisticas`, `RelatoDeportivo` | **Observer** |
 | `simulacion` | `MotorSimulacion` | Genera eventos por tramo (ruleta probabilística) |
-| `persistencia` | `ConexionDB` (**Singleton**), `PartidoDATA`, `EquipoDATA`, `JugadorDATA`, **`EstadioDATA` (nuevo, Tarea 3)** (**DAO**) | Persistencia en memoria |
+| `persistencia` | `ConexionDB` (**Singleton**, posee la `Connection` JDBC), `PartidoDATA`, `EquipoDATA`, `JugadorDATA`, `EstadioDATA` (**DAO**) | **Persistencia en SQLite/JDBC** (ver sección 10) |
 | `ui` | `ControladorMenuPrincipal`, `ControladorConfigurarPartido`, `ControladorSimulacion`, `ControladorGestionEquipos`, `ControladorHistorial`, `MainApp` | **STUBS VACÍOS** (placeholders JavaFX comentados; el enfoque elegido es consola, ver Tarea 6) |
 
 > El paquete `model` con `Clase.java` (leftover) **ya fue eliminado** (B8).
@@ -126,8 +135,8 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta
 ---
 
 ## 8. Convenciones del proyecto (importante para no romper la estructura)
-- Java sin frameworks. Persistencia **en memoria intencional** (sin BD real), vía el Singleton `ConexionDB`.
-- **DAOs aislados**: si mañana se migra a SQLite/JDBC, solo se cambian los cuerpos de los métodos de cada `*DATA`, sin tocar el resto del sistema. Nadie fuera de `persistencia` debe saber cómo se almacena.
+- Java 21. Única dependencia externa: el driver `sqlite-jdbc` (en `lib/`, versionado). Persistencia en **SQLite** (`simulador.db`), vía el Singleton `ConexionDB`.
+- **DAOs aislados**: la migración a SQLite/JDBC solo reescribió los cuerpos de cada `*DATA` y de `ConexionDB`, sin tocar el resto del sistema. Nadie fuera de `persistencia` sabe cómo se almacena (modelo, fachada, observadores y `Main` quedaron intactos).
 - **Código nuevo sin Streams** (usar `for`/`while`). Los Streams ya existentes en DAOs/motor se dejan como están salvo pedido explícito.
 - Comentarios en español. Mantener nombres de paquetes/clases existentes.
 - Las features nuevas deben encajar en los patrones existentes (Facade/Builder/State/Strategy/Observer/DAO).
@@ -147,3 +156,38 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta
 | 6 | Menú de consola interactivo (reemplazar `Main`) — **Fase 3 (última)** | ✅ Hecho y verificado (compila + corrida end-to-end por pipe: gestión → configurar → jugar con cambio de táctica en entretiempo → historial) |
 
 > **Plan completo.** Las 6 tareas (Fases 1-3) están terminadas. Lo único restante son los 4 ítems opcionales de la sección 7.
+
+---
+
+## 10. Migración de persistencia a SQLite/JDBC
+
+Se reemplazó la persistencia en memoria por **SQLite vía JDBC**, tocando **solo** el paquete `persistencia` (regla de oro cumplida).
+
+### Driver (P1)
+- `lib/sqlite-jdbc-3.42.0.0.jar`, versionado en el repo (sin Maven/Gradle).
+- **Por qué 3.42.0.0 y no 3.45.x:** desde la 3.43.0.0 `sqlite-jdbc` declara `slf4j-api` como dependencia; con jars sueltos (sin Maven que la resuelva) la 3.45.x falla en runtime con `NoClassDefFoundError: org/slf4j/LoggerFactory`. La 3.42.0.0 es autocontenida (un solo jar, sin warnings).
+
+### `ConexionDB` (P2)
+- Singleton: abre `DriverManager.getConnection("jdbc:sqlite:simulador.db")` la primera vez y crea las 5 tablas (`CREATE TABLE IF NOT EXISTS`: `estadios`, `equipos`, `jugadores`, `partidos`, `eventos`).
+- Expone `getConexion()` (la `Connection`). Si la conexión falla, lanza `RuntimeException` (error visible).
+
+### DAOs (P3) — `PreparedStatement` en todas las queries
+- **`EstadioDATA` / `JugadorDATA`**: upsert por nombre, `obtenerTodos`/`buscarPorNombre`/`eliminar` con JDBC.
+- **`EquipoDATA`**: guarda táctica como `getClass().getSimpleName()` y la mapea de vuelta al reconstruir. `guardar()` **también persiste la plantilla** (cada jugador con su `equipo_nombre`).
+- **`PartidoDATA`**: `guardar()` inserta el partido (`Statement.RETURN_GENERATED_KEYS`) y luego sus eventos. `obtenerTodos()` reconstruye cada `Partido` con sus eventos para que `getResumenTexto()` y el estado funcionen.
+
+### Decisiones de diseño que NO eran obvias
+1. **Caché de identidad en `EquipoDATA`** (`static Map<String,Equipo>`). Con listas en memoria, `obtenerEquipos()` devolvía siempre la misma instancia, así que los jugadores agregados desde el menú quedaban "pegados" al equipo. Como `Jugador` no conoce a su equipo y `registrarJugador(jugador)` no recibe el equipo, reconstruir objetos nuevos en cada lectura habría dejado las plantillas vacías (y los partidos 0-0). La caché preserva la identidad dentro de la sesión; SQLite es el almacén durable. **No se pudo evitar sin tocar `Main`/fachada.**
+2. **Asociación jugador→equipo** la persiste `EquipoDATA.guardar()` (que tiene el equipo y su plantilla), no `JugadorDATA.guardar()` (que solo recibe el jugador y deja `equipo_nombre` en NULL / sin pisar).
+3. **Silenciado de `System.out`** durante la reconstrucción de partidos en `PartidoDATA`: el constructor de `Partido` y `setEstado()` imprimen mensajes de ciclo de vida; se silencia temporalmente (try/finally, contenido en `persistencia`) para no ensuciar `mostrarHistorial()`.
+
+### Limitaciones aceptadas
+- El **número de camiseta** no se persiste (la tabla `jugadores` no lo tiene); al reconstruir se asigna secuencial.
+- `equipos.estadio_nombre` queda **NULL**: el modelo `Equipo` no referencia un `Estadio`.
+- Un jugador agregado por menú que **nunca** llega a jugar/configurar no graba su `equipo_nombre` hasta el próximo `guardar()` del equipo (en sesión sí se ve por la caché).
+- La táctica persistida es la del momento de `guardar()`; cambios de táctica en el entretiempo no se regraban (no hay `guardar()` posterior).
+
+### Verificación
+- **Compila OK** con el driver en el classpath.
+- **Run 1** (BD limpia): registrar equipos/jugadores → configurar → jugar con cambio de táctica en entretiempo → guardar → historial. OK (exit 0).
+- **Run 2** (JVM nuevo, caché estática vacía, misma `simulador.db`): lee equipos con táctica y plantilla, plantilla de Argentina (Messi, DiMaria) e historial (`Argentina 0 - 1 Francia | Eventos: 7 | Estado: Finalizado`). **La persistencia sobrevive al reinicio.**

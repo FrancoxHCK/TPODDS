@@ -1,27 +1,29 @@
-//Como no estamos utilizando bases de datos real ni dependencias externas, entonces la persistencia vamos a hacerla usando almacenamiento en memoria (Listas/mapas).
+// Singleton que gestiona la conexion JDBC a SQLite (archivo simulador.db en la raiz del proyecto).
+// Antes esta clase guardaba listas en memoria; ahora abre/posee la conexion y crea el esquema.
+// Regla de oro de la migracion: nada fuera del paquete persistencia cambia. Los DAOs obtienen
+// la Connection con getConexion(); nadie mas usa esta clase.
 
 package videojuego.persistencia;
 
-import videojuego.modelo.Equipo;
-import videojuego.modelo.Estadio;
-import videojuego.modelo.Jugador;
-import videojuego.modelo.Partido;
-import java.util.ArrayList;
-import java.util.List;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.Statement;
 
 public class ConexionDB {
     private static ConexionDB instancia;
+    private static final String URL = "jdbc:sqlite:simulador.db";
 
-    private final List<Equipo> equipos;
-    private final List<Jugador> jugadores;
-    private final List<Partido> partidos;
-    private final List<Estadio> estadios;
+    private final Connection conexion;
 
     private ConexionDB() {
-        this.equipos = new ArrayList<>();
-        this.jugadores = new ArrayList<>();
-        this.partidos = new ArrayList<>();
-        this.estadios = new ArrayList<>();
+        try {
+            this.conexion = DriverManager.getConnection(URL);
+            crearTablas();
+        } catch (SQLException e) {
+            // Si la conexion falla, que el error sea visible (no seguir con estado invalido).
+            throw new RuntimeException("No se pudo abrir la conexion con SQLite (" + URL + "): " + e.getMessage(), e);
+        }
     }
 
     public static ConexionDB getInstancia() {
@@ -31,10 +33,66 @@ public class ConexionDB {
         return instancia;
     }
 
-    public List<Equipo> getEquipos() { return equipos; }
-    public List<Jugador> getJugadores() { return jugadores; }
-    public List<Partido> getPartidos() { return partidos; }
-    public List<Estadio> getEstadios() { return estadios; }
+    public Connection getConexion() {
+        return conexion;
+    }
 
+    // Crea las tablas si no existen. Se ejecuta una sola vez, al instanciar el Singleton.
+    private void crearTablas() {
+        String[] tablas = {
+                """
+                CREATE TABLE IF NOT EXISTS estadios (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre TEXT NOT NULL
+                )
+                """,
+                """
+                CREATE TABLE IF NOT EXISTS equipos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre TEXT NOT NULL,
+                    tactica TEXT NOT NULL,
+                    estadio_nombre TEXT
+                )
+                """,
+                """
+                CREATE TABLE IF NOT EXISTS jugadores (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre TEXT NOT NULL,
+                    posicion TEXT NOT NULL,
+                    estado TEXT NOT NULL,
+                    equipo_nombre TEXT
+                )
+                """,
+                """
+                CREATE TABLE IF NOT EXISTS partidos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    equipo_local TEXT NOT NULL,
+                    equipo_visitante TEXT NOT NULL,
+                    goles_local INTEGER NOT NULL,
+                    goles_visitante INTEGER NOT NULL,
+                    modo_juego TEXT,
+                    estado_final TEXT
+                )
+                """,
+                """
+                CREATE TABLE IF NOT EXISTS eventos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    partido_id INTEGER NOT NULL,
+                    tipo TEXT NOT NULL,
+                    minuto INTEGER NOT NULL,
+                    jugador_nombre TEXT,
+                    equipo_nombre TEXT,
+                    FOREIGN KEY (partido_id) REFERENCES partidos(id)
+                )
+                """
+        };
+        try (Statement st = conexion.createStatement()) {
+            for (String ddl : tablas) {
+                st.execute(ddl);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("No se pudieron crear las tablas: " + e.getMessage(), e);
+        }
+    }
 }
-//  Por qué: Una sola instancia garantiza que todos los DAOs lean y escriban en las mismas listas. Simula la "sesión de base de datos".
+// Por que: una sola instancia garantiza que todos los DAOs usen la misma Connection a simulador.db.
