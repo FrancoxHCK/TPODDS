@@ -35,3 +35,6 @@ simulador.db
 *.db
 # Lista de fuentes generada por el comando de compilacion
 sources.txt
+# JavaFX SDK: NO se versiona. Cada integrante lo descarga en su maquina
+# (build de su SO) dentro de esta carpeta. Ver HANDOFF seccion 1.b.
+lib/javafx-sdk-21/

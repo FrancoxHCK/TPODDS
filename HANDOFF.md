@@ -31,6 +31,78 @@ Documento para retomar el proyecto en otra sesión. Describe el **estado real de
 
 ---
 
+## 1.b Interfaz gráfica (JavaFX) — en construcción
+
+- **Punto de entrada gráfico:** `src/videojuego/ui/MainApp.java` (`extends Application`). Convive con `Main.java` (consola), que **se mantiene intacto**. Son dos vías de entrada independientes: para la consola se ejecuta `Main`, para la GUI se ejecuta `videojuego.ui.MainApp`.
+- **Estado actual (esqueleto):** solo navegación. El menú principal abre y desde él se puede entrar a las 4 pantallas (Gestión de Equipos, Configurar Partido, Simulación, Historial) y **volver al menú**. Las 4 pantallas son aún vistas mínimas (título + botón "Volver al menú"), sin lógica de negocio.
+- **Navegación:** un único `Stage` con una única `Scene`; navegar = `escena.setRoot(...)`. El contrato está en `videojuego.ui.Navegador` (interfaz + enum `Pantalla` anidado); `MainApp` lo implementa y se lo pasa a cada controlador. La lógica (cuando llegue) seguirá pasando por la fachada `ControladorPartido` (única instancia compartida que `MainApp` crea y reparte a los controladores). **JavaFX puro, sin FXML:** cada controlador arma su vista por código en `getVista()`.
+- **Dependencia nueva: JavaFX 21 SDK — NO se versiona en el repo.** Cada integrante lo descarga **una vez en su máquina**, con el build de **su** sistema operativo, dentro de la carpeta `lib/javafx-sdk-21/` (que está **gitignorada**, ver `.gitignore`). Motivo: el SDK no es Java puro — además de los `.jar` trae **librerías nativas** específicas del SO (`.dll` en Windows, `.dylib` en macOS, `.so` en Linux), así que no puede compartirse por git; cada uno usa el suyo. El módulo que se usa es `javafx.controls` (arrastra `javafx.base` y `javafx.graphics`); no se usa `javafx.fxml`.
+
+### Setup inicial del SDK (una vez por máquina)
+
+Descargá el JavaFX **21 SDK** de Gluon para TU sistema operativo y dejalo en `lib/javafx-sdk-21/`, de modo que queden los jars en `lib/javafx-sdk-21/lib/*.jar`. Por terminal, desde la raíz del repo:
+
+- **Windows x64 (PowerShell)** — usar `curl.exe` (PowerShell 5.1 no negocia TLS 1.2 por defecto con `Invoke-WebRequest`):
+  ```powershell
+  curl.exe -L -o lib\_jfx.zip https://download2.gluonhq.com/openjfx/21.0.6/openjfx-21.0.6_windows-x64_bin-sdk.zip
+  Expand-Archive lib\_jfx.zip -DestinationPath lib\_jfxtmp -Force
+  Move-Item lib\_jfxtmp\javafx-sdk-21.0.6 lib\javafx-sdk-21
+  Remove-Item -Recurse -Force lib\_jfxtmp, lib\_jfx.zip
+  ```
+- **macOS (bash/zsh)** — "Acerca de esta Mac" indica el chip: Apple Silicon (M1/M2/M3/M4) = `aarch64`, Intel = `x64`:
+  ```bash
+  # Apple Silicon (aarch64):
+  curl -L -o /tmp/jfx.zip https://download2.gluonhq.com/openjfx/21.0.6/openjfx-21.0.6_osx-aarch64_bin-sdk.zip
+  # Intel (x64): usar en su lugar .../openjfx-21.0.6_osx-x64_bin-sdk.zip
+  unzip /tmp/jfx.zip -d /tmp/jfx && mv /tmp/jfx/javafx-sdk-21.0.6 lib/javafx-sdk-21
+  ```
+- **Linux (bash)** — `linux-x64` (o `aarch64` si tu equipo es ARM):
+  ```bash
+  curl -L -o /tmp/jfx.zip https://download2.gluonhq.com/openjfx/21.0.6/openjfx-21.0.6_linux-x64_bin-sdk.zip
+  unzip /tmp/jfx.zip -d /tmp/jfx && mv /tmp/jfx/javafx-sdk-21.0.6 lib/javafx-sdk-21
+  ```
+
+> Como `lib/javafx-sdk-21/` está gitignorada, este paso **no** genera cambios en `git status`. La **consola** (`Main`) no usa JavaFX y corre sin este setup. Alternativa válida: dejar el SDK en otra ruta (ej. `~/javafx-sdk-21`) y cambiar el `--module-path` de los comandos de abajo.
+
+### Compilar / ejecutar la GUI
+
+Con el SDK ya en `lib/javafx-sdk-21/`, los comandos son equivalentes en todos los SO (cambia la shell y el separador de classpath: `;` en Windows, `:` en Linux/Mac):
+
+- **Windows (PowerShell)** — comandos **verificados** en esta máquina:
+  ```powershell
+  Remove-Item -Recurse -Force bin -ErrorAction SilentlyContinue; New-Item -ItemType Directory bin | Out-Null
+  Get-ChildItem -Recurse src -Filter *.java | Resolve-Path -Relative | Out-File -Encoding ascii sources.txt
+  javac --module-path "lib\javafx-sdk-21\lib" --add-modules javafx.controls -cp "lib\sqlite-jdbc-3.42.0.0.jar" -d bin "@sources.txt"
+  java --module-path "lib\javafx-sdk-21\lib" --add-modules javafx.controls -cp "bin;lib\sqlite-jdbc-3.42.0.0.jar" videojuego.ui.MainApp
+  ```
+- **Linux / macOS (bash):**
+  ```bash
+  rm -rf bin && mkdir bin
+  find src -name "*.java" > sources.txt
+  javac --module-path lib/javafx-sdk-21/lib --add-modules javafx.controls -cp lib/sqlite-jdbc-3.42.0.0.jar -d bin @sources.txt
+  java --module-path lib/javafx-sdk-21/lib --add-modules javafx.controls -cp "bin:lib/sqlite-jdbc-3.42.0.0.jar" videojuego.ui.MainApp
+  ```
+- **⚠️ Gotcha del `sources.txt` en PowerShell** (descubierto al verificar — aplica también al comando de consola de la sección 1): `javac @sources.txt` falla si el archivo de listado no está bien generado. Dos causas y su fix (ya aplicado en el comando de arriba):
+  1. **Codificación:** `> sources.txt` en **Windows PowerShell 5.1** escribe **UTF-16 LE con BOM** y `javac` corta con `MalformedInputException`. Solución: `Out-File -Encoding ascii` (o UTF-8 sin BOM).
+  2. **Espacios en la ruta:** la ruta de este repo contiene `Desarrollo SW` (con espacio); con rutas **absolutas** (`ForEach-Object FullName`) `javac` parte el path por el espacio (`invalid flag: ...\Desarrollo`). Solución: usar rutas **relativas** con `Resolve-Path -Relative` (ejecutando desde la raíz del repo, el espacio queda en la carpeta padre, fuera del listado). En bash con `find` no aparece este problema.
+- Al ejecutar con **JDK 25** aparecen WARNINGs benignos (`restricted method System::load` por la carga de nativas de JavaFX, y `sun.misc.Unsafe::allocateMemory` del render interno Marlin de JavaFX 21); **no son errores**, la app abre igual y son ignorables. Para silenciarlos ambos, agregar al comando `java` (o a las VM options del IDE): `--enable-native-access=javafx.graphics --sun-misc-unsafe-memory-access=allow`.
+- Notas: el `javac` único compila **toda** `src/` (consola + GUI) de una pasada; agregar `--add-modules` no afecta a las clases de consola. La **consola** se sigue corriendo con el comando de la sección 1 (sin JavaFX). En esta máquina el JDK instalado es **25** (JavaFX 21 es LTS y corre sobre JDK 25 sin problemas).
+
+### Setup en IntelliJ IDEA (imports `javafx.*` en rojo)
+
+Como el SDK se baja como jars sueltos (sin Maven/Gradle), **IntelliJ no lo detecta solo**: hay que configurarlo a mano una vez por máquina. Son dos pasos:
+
+1. **Resolver los imports en rojo (agregar la librería):** `File → Project Structure` (Ctrl+Alt+Shift+S) → `Project Settings → Libraries` → `+` → **Java** → seleccionar la carpeta `lib/javafx-sdk-21/lib` (toma todos los `.jar`) → OK → elegir el módulo del proyecto → Apply. Esto calla los `Cannot resolve symbol javafx`.
+2. **Que arranque al correr (VM options):** `Run → Edit Configurations…` → la *Application* con Main class `videojuego.ui.MainApp` → campo **VM options** (si no aparece: `Modify options → Add VM options`) →
+   ```
+   --module-path "<RUTA_ABSOLUTA_AL_REPO>\lib\javafx-sdk-21\lib" --add-modules javafx.controls
+   ```
+   (en Windows las comillas son necesarias si la ruta tiene espacios; en Mac/Linux usar `/` y `:`). Sin esto, al ejecutar desde el IDE aparece `Error: JavaFX runtime components are missing`.
+
+> Verificá además que el **Project SDK** del IDE sea un JDK 21+ (`Project Structure → Project`). La config del IDE es local (`.idea/`), no se comparte por git.
+
+---
+
 ## 2. Arquitectura y paquetes (`src/videojuego/`)
 
 | Paquete | Clases | Rol |
@@ -43,7 +115,7 @@ Documento para retomar el proyecto en otra sesión. Describe el **estado real de
 | `observador` | `IObservadorPartido`, `Marcador`, `Estadisticas`, `RelatoDeportivo` | **Observer** |
 | `simulacion` | `MotorSimulacion` | Genera eventos por tramo (ruleta probabilística) |
 | `persistencia` | `ConexionDB` (**Singleton**, posee la `Connection` JDBC), `PartidoDATA`, `EquipoDATA`, `JugadorDATA`, `EstadioDATA` (**DAO**) | **Persistencia en SQLite/JDBC** (ver sección 10) |
-| `ui` | `ControladorMenuPrincipal`, `ControladorConfigurarPartido`, `ControladorSimulacion`, `ControladorGestionEquipos`, `ControladorHistorial`, `MainApp` | **STUBS VACÍOS** (placeholders JavaFX comentados; el enfoque elegido es consola, ver Tarea 6) |
+| `ui` | `MainApp`, `Navegador` (interfaz + enum `Pantalla`), `ControladorMenuPrincipal`, `ControladorConfigurarPartido`, `ControladorSimulacion`, `ControladorGestionEquipos`, `ControladorHistorial` | **GUI JavaFX en construcción** (ver sección 1.b). Esqueleto de navegación funcionando; vistas mínimas sin lógica. Toda la lógica pasará por `ControladorPartido`. |
 
 > El paquete `model` con `Clase.java` (leftover) **ya fue eliminado** (B8).
 
