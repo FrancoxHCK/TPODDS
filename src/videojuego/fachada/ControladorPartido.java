@@ -14,6 +14,9 @@ import videojuego.persistencia.JugadorDATA;
 import videojuego.persistencia.PartidoDATA;
 import videojuego.simulacion.MotorSimulacion;
 import videojuego.tactica.ITactica;
+import videojuego.tactica.TacticaOfensiva;
+import videojuego.tactica.TacticaDefensiva;
+import videojuego.tactica.TacticaEquilibrada;
 
 import java.util.List;
 
@@ -147,6 +150,56 @@ ControladorPartido {
 
     public List<Estadio> obtenerEstadios() {
         return new EstadioDATA().obtenerTodos();
+    }
+
+    // === Altas para la UI (encapsulan la creacion del modelo) ===
+    // La UI no instancia el modelo directamente: recibe Strings y aca se hace el
+    // 'new'. Replican exactamente lo que hace el menu de consola (Main), pero
+    // detras de la fachada. Son aditivos: no alteran registrarEquipo/Jugador/Estadio.
+
+    // Crea un equipo nuevo junto a su estadio (mismos valores por defecto que Main:
+    // ciudad "Sin especificar", capacidad 0) y persiste ambos.
+    public void registrarEquipoConEstadio(String nombreEquipo, String nombreEstadio) {
+        Equipo equipo = new Equipo(nombreEquipo);
+        Estadio estadio = new Estadio(nombreEstadio, "Sin especificar", 0);
+        registrarEquipo(equipo);
+        registrarEstadio(estadio);
+    }
+
+    // Agrega un jugador al equipo indicado: autoasigna el numero de camiseta
+    // (cantidad actual + 1), lo asocia al equipo y lo persiste.
+    public void agregarJugadorAEquipo(Equipo equipo, String nombreJugador, String posicion) {
+        int numero = equipo.getJugadores().size() + 1;
+        Jugador jugador = new Jugador(nombreJugador, posicion, numero);
+        equipo.agregarJugador(jugador);
+        registrarJugador(jugador);
+    }
+
+    // Aplica una tactica inicial (antes del partido) a un equipo, mapeando el nombre
+    // a la tactica concreta. La UI no instancia tacticas (Regla 1): el 'new' vive aca.
+    // Se aplica directo sobre el equipo (sin el guard de finalizado), igual que Main al
+    // configurar. Nombres validos: "Ofensiva", "Defensiva", "Equilibrada".
+    public void configurarTacticaInicial(Equipo equipo, String nombreTactica) {
+        ITactica tactica = crearTactica(nombreTactica);
+        if (tactica != null) {
+            equipo.cambiarTactica(tactica);
+        }
+    }
+
+    // Helper privado: mapea un nombre a una instancia de tactica (o null si no coincide).
+    // Reutilizable por la configuracion inicial y por el cambio en el entretiempo.
+    private ITactica crearTactica(String nombreTactica) {
+        if (nombreTactica == null) {
+            return null;
+        }
+        if (nombreTactica.equalsIgnoreCase("Ofensiva")) {
+            return new TacticaOfensiva();
+        } else if (nombreTactica.equalsIgnoreCase("Defensiva")) {
+            return new TacticaDefensiva();
+        } else if (nombreTactica.equalsIgnoreCase("Equilibrada")) {
+            return new TacticaEquilibrada();
+        }
+        return null;
     }
 
     public Partido getPartido() {
