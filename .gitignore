@@ -35,6 +35,9 @@ simulador.db
 *.db
 # Lista de fuentes generada por el comando de compilacion
 sources.txt
-# JavaFX SDK: NO se versiona. Cada integrante lo descarga en su maquina
-# (build de su SO) dentro de esta carpeta. Ver HANDOFF seccion 1.b.
-lib/javafx-sdk-21/
+# JavaFX SDK: SE versiona en el repo (Windows + Mac), proyecto self-contained.
+# La regla 'bin/' de mas arriba ignoraria las DLLs nativas del SDK de Windows
+# (viven en bin/), por eso se reincluyen explicitamente. El SDK de Mac guarda
+# sus .dylib en lib/, que no esta afectado por ninguna regla. Ver HANDOFF 1.b.
+!lib/javafx-sdk-21-win/bin/
+!lib/javafx-sdk-21-win/bin/**
