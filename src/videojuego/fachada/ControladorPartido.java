@@ -4,8 +4,10 @@ import videojuego.builder.PartidoBuilder;
 import videojuego.estado.EstadoFinalizado;
 import videojuego.modelo.Equipo;
 import videojuego.modelo.Estadio;
+import videojuego.modelo.EventoDeportivo;
 import videojuego.modelo.Jugador;
 import videojuego.modelo.Partido;
+import videojuego.modelo.TipoEvento;
 import videojuego.observador.Estadisticas;
 import videojuego.observador.Marcador;
 import videojuego.persistencia.EquipoDATA;
@@ -18,6 +20,7 @@ import videojuego.tactica.TacticaOfensiva;
 import videojuego.tactica.TacticaDefensiva;
 import videojuego.tactica.TacticaEquilibrada;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class
@@ -78,6 +81,17 @@ ControladorPartido {
         }
     }
 
+    // Variante por nombre del cambio de tactica en tiempo real, pensada para la UI:
+    // mapea el nombre a la tactica concreta (la UI no instancia tacticas, Regla 1) y
+    // delega en cambiarTactica(Equipo, ITactica), que conserva la guarda de finalizado.
+    // Nombres validos: "Ofensiva", "Defensiva", "Equilibrada"; si no coincide, no hace nada.
+    public void cambiarTacticaEnVivo(Equipo equipo, String nombreTactica) {
+        ITactica nueva = crearTactica(nombreTactica);
+        if (nueva != null) {
+            cambiarTactica(equipo, nueva);
+        }
+    }
+
     // Cambia la tactica de un equipo en tiempo real. El MotorSimulacion lee
     // equipo.getTactica() al generar cada evento, asi que el cambio impacta de
     // inmediato en los tramos que resten por simular.
@@ -108,6 +122,45 @@ ControladorPartido {
     // Expone el historial crudo para que la UI lo consuma sin depender de System.out.
     public List<Partido> obtenerHistorial() {
         return new PartidoDATA().obtenerTodos();
+    }
+
+    // Devuelve el relato del partido en curso como lista de lineas, para que la GUI lo
+    // muestre en vivo (la consola lo recibe por System.out via el observador RelatoDeportivo;
+    // la UI no tiene acceso a ese stream). Se reconstruye desde los eventos ya registrados
+    // del partido, sin tocar el builder ni el observador (Regla 2). Si no hay partido,
+    // devuelve una lista vacia.
+    public List<String> obtenerRelato() {
+        List<String> lineas = new ArrayList<>();
+        if (partido == null) {
+            return lineas;
+        }
+        List<EventoDeportivo> eventos = partido.getEventos();
+        for (int i = 0; i < eventos.size(); i++) {
+            lineas.add(formatearRelato(eventos.get(i)));
+        }
+        return lineas;
+    }
+
+    // Helper privado: arma la linea de relato de un evento. Replica el formato textual
+    // que usa RelatoDeportivo para la consola, adaptando el dato del modelo a la GUI.
+    private String formatearRelato(EventoDeportivo evento) {
+        String jugador = evento.getJugador().getNombre();
+        String equipo = evento.getEquipo().getNombre();
+        int min = evento.getMinuto();
+        TipoEvento tipo = evento.getTipo();
+        if (tipo == TipoEvento.GOL) {
+            return "Min " + min + " - GOL de " + jugador + " (" + equipo + ")";
+        } else if (tipo == TipoEvento.FALTA) {
+            return "Min " + min + " - Falta cometida por " + jugador;
+        } else if (tipo == TipoEvento.TARJETA_AMARILLA) {
+            return "Min " + min + " - Tarjeta AMARILLA para " + jugador;
+        } else if (tipo == TipoEvento.TARJETA_ROJA) {
+            return "Min " + min + " - Tarjeta ROJA para " + jugador + ". Se va expulsado.";
+        } else if (tipo == TipoEvento.LESION) {
+            return "Min " + min + " - " + jugador + " sale lesionado del campo.";
+        } else { // PENAL
+            return "Min " + min + " - PENAL a favor de " + equipo + ". Ejecuta " + jugador;
+        }
     }
 
     public String getResultado() {
