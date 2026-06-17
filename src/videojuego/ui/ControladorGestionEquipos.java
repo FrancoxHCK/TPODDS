@@ -14,6 +14,9 @@ import videojuego.fachada.ControladorPartido;
 import videojuego.modelo.Equipo;
 import videojuego.modelo.Jugador;
 
+import java.util.ArrayList;
+import java.util.List;
+
 // Pantalla de gestion de equipos y jugadores.
 // Replica el submenu de gestion de Main (registrar equipo+estadio, agregar jugador,
 // ver equipos y ver jugadores) pero de forma grafica. Toda la logica pasa por la
@@ -25,7 +28,7 @@ public class ControladorGestionEquipos {
 
     // Componentes que se consultan/actualizan desde varios handlers.
     private ListView<Equipo> listaEquipos;
-    private ListView<Jugador> listaJugadores;
+    private ListView<String> listaJugadores; // lineas agrupadas/ordenadas por posicion
     private Label lblMensaje;
 
     public ControladorGestionEquipos(Navegador navegador, ControladorPartido fachada) {
@@ -66,7 +69,8 @@ public class ControladorGestionEquipos {
 
         listaJugadores = new ListView<>();
         listaJugadores.setPrefSize(360, 220);
-        // Jugador.toString() ya da una linea legible (numero - nombre (posicion) - estado).
+        // La plantilla se muestra AGRUPADA y ORDENADA por posicion (Arqueros, Defensores,
+        // Mediocampistas, Delanteros) con un encabezado por grupo (ver agruparPorPosicion).
 
         // Al seleccionar un equipo, se muestra su plantilla.
         listaEquipos.getSelectionModel().selectedItemProperty().addListener(
@@ -185,13 +189,64 @@ public class ControladorGestionEquipos {
         listaEquipos.getItems().setAll(fachada.obtenerEquipos());
     }
 
-    // Muestra la plantilla del equipo dado (o vacia si no hay seleccion).
+    // Muestra la plantilla del equipo dado (o vacia si no hay seleccion), agrupada y
+    // ordenada por posicion.
     private void mostrarJugadores(Equipo equipo) {
         if (equipo == null) {
             listaJugadores.getItems().clear();
         } else {
-            listaJugadores.getItems().setAll(equipo.getJugadores());
+            listaJugadores.getItems().setAll(agruparPorPosicion(equipo));
         }
+    }
+
+    // Arma las lineas de la plantilla agrupadas por posicion, en el orden tactico habitual
+    // (Arqueros -> Defensores -> Mediocampistas -> Delanteros). Cada grupo lleva un encabezado
+    // y solo aparece si tiene jugadores. Las posiciones no estandar (o vacias) caen en "Otros".
+    // Sin Streams (convencion del proyecto); la plantilla es chica.
+    private List<String> agruparPorPosicion(Equipo equipo) {
+        String[] categorias = {"Arquero", "Defensor", "Mediocampista", "Delantero"};
+        String[] titulos = {"Arqueros", "Defensores", "Mediocampistas", "Delanteros"};
+        List<Jugador> jugadores = equipo.getJugadores();
+        boolean[] usado = new boolean[jugadores.size()];
+
+        List<String> lineas = new ArrayList<>();
+        for (int c = 0; c < categorias.length; c++) {
+            List<String> grupo = new ArrayList<>();
+            for (int i = 0; i < jugadores.size(); i++) {
+                Jugador j = jugadores.get(i);
+                if (j.getPosicion() != null && j.getPosicion().equalsIgnoreCase(categorias[c])) {
+                    grupo.add(formatearJugador(j));
+                    usado[i] = true;
+                }
+            }
+            if (!grupo.isEmpty()) {
+                lineas.add("── " + titulos[c] + " ──");
+                for (int k = 0; k < grupo.size(); k++) {
+                    lineas.add(grupo.get(k));
+                }
+            }
+        }
+
+        // Cualquier jugador con posicion no reconocida va al final, bajo "Otros".
+        List<String> otros = new ArrayList<>();
+        for (int i = 0; i < jugadores.size(); i++) {
+            if (!usado[i]) {
+                otros.add(formatearJugador(jugadores.get(i)));
+            }
+        }
+        if (!otros.isEmpty()) {
+            lineas.add("── Otros ──");
+            for (int k = 0; k < otros.size(); k++) {
+                lineas.add(otros.get(k));
+            }
+        }
+        return lineas;
+    }
+
+    // Formatea una linea de jugador para el panel. NO incluye el numero de camiseta: es una
+    // enumeracion decorativa (autoasignada por orden de alta y no persistida), no un id real.
+    private String formatearJugador(Jugador j) {
+        return "   " + j.getNombre() + " (" + j.getPosicion() + ") - " + j.getEstado();
     }
 
     // Centraliza el feedback al usuario (reemplaza los System.out.println de Main).

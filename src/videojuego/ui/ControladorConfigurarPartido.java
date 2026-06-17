@@ -6,6 +6,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.util.StringConverter;
 import videojuego.fachada.ControladorPartido;
@@ -45,19 +46,34 @@ public class ControladorConfigurarPartido {
         configurarComboEstadio(cbEstadio);
         cbEstadio.getItems().setAll(fachada.obtenerEstadios());
 
-        // Al seleccionar el equipo local, el estadio se auto-asigna al estadio del equipo.
+        // Boton para des-fijar el estadio auto-asignado y poder elegir otro a mano.
+        // Solo aparece cuando el estadio quedo fijado por el equipo local.
+        Button btnCambiarEstadio = new Button("Cambiar estadio");
+        btnCambiarEstadio.setVisible(false);
+        btnCambiarEstadio.setManaged(false);
+
+        // Al seleccionar el equipo local, el estadio se auto-asigna al del equipo y queda
+        // FIJADO (combo deshabilitado); con "Cambiar estadio" se libera para elegir otro.
+        // Si el equipo local no tiene estadio propio cargado, la seleccion queda manual.
         cbLocal.valueProperty().addListener((obs, anterior, seleccionado) -> {
             if (seleccionado != null) {
                 Estadio estadioLocal = fachada.obtenerEstadioDeEquipo(seleccionado);
                 if (estadioLocal != null) {
-                    for (Estadio e : cbEstadio.getItems()) {
-                        if (e.getNombre().equals(estadioLocal.getNombre())) {
-                            cbEstadio.setValue(e);
-                            break;
-                        }
-                    }
+                    seleccionarEstadioPorNombre(cbEstadio, estadioLocal.getNombre());
+                    cbEstadio.setDisable(true);
+                    btnCambiarEstadio.setVisible(true);
+                    btnCambiarEstadio.setManaged(true);
+                } else {
+                    cbEstadio.setDisable(false);
+                    btnCambiarEstadio.setVisible(false);
+                    btnCambiarEstadio.setManaged(false);
                 }
             }
+        });
+        btnCambiarEstadio.setOnAction(e -> {
+            cbEstadio.setDisable(false);
+            btnCambiarEstadio.setVisible(false);
+            btnCambiarEstadio.setManaged(false);
         });
 
         // Combos de tacticas (opcionales) y modo. Son etiquetas de texto, no modelo.
@@ -78,7 +94,8 @@ public class ControladorConfigurarPartido {
         grid.setVgap(10);
         grid.add(new Label("Equipo local:"), 0, 0);        grid.add(cbLocal, 1, 0);
         grid.add(new Label("Equipo visitante:"), 0, 1);    grid.add(cbVisitante, 1, 1);
-        grid.add(new Label("Estadio:"), 0, 2);             grid.add(cbEstadio, 1, 2);
+        HBox cajaEstadio = new HBox(10, cbEstadio, btnCambiarEstadio);
+        grid.add(new Label("Estadio:"), 0, 2);             grid.add(cajaEstadio, 1, 2);
         grid.add(new Label("Tactica local:"), 0, 3);       grid.add(cbTacticaLocal, 1, 3);
         grid.add(new Label("Tactica visitante:"), 0, 4);   grid.add(cbTacticaVisitante, 1, 4);
         grid.add(new Label("Modo:"), 0, 5);                grid.add(cbModo, 1, 5);
@@ -137,6 +154,17 @@ public class ControladorConfigurarPartido {
                 return null; // no se usa: el combo no es editable
             }
         });
+    }
+
+    // Selecciona en el combo el Estadio cuyo nombre coincide (la instancia que esta en la
+    // lista del combo, no una nueva), para que el ComboBox lo muestre como seleccionado.
+    private void seleccionarEstadioPorNombre(ComboBox<Estadio> combo, String nombre) {
+        for (Estadio e : combo.getItems()) {
+            if (e.getNombre().equals(nombre)) {
+                combo.setValue(e);
+                return;
+            }
+        }
     }
 
     // Configura un ComboBox de estadios para mostrar solo el nombre del estadio.

@@ -8,9 +8,15 @@ import java.util.Random;
 public class MotorSimulacion {
 
     private final Random random = new Random();
-    private int minutoBase = 0; // Minuto base para generar eventos
 
     public void simularTramo(Partido partido) {
+        // El minuto base depende del TRAMO que se juega; NO es estado del motor: el Primer
+        // Tiempo arranca en 0 y el Segundo en 45. Se calcula desde el estado del partido en
+        // vez de acumularlo en un campo, para que cada partido reinicie su numeracion de
+        // minutos. El motor es una unica instancia compartida por todos los partidos de la
+        // sesion: un campo acumulado arrastraba el minuto del partido anterior (y, al quedar
+        // los minutos > 45, el relato etiquetaba el primer tiempo como "Segundo Tiempo").
+        int minutoBase = partido.getEstadoActual().getNombre().equals("Segundo Tiempo") ? 45 : 0;
         int cantidadEventos = 3 + random.nextInt(6); // Genera entre 3 y 8 eventos por tramo
 
         for (int i = 0; i < cantidadEventos; i++) {
@@ -36,7 +42,6 @@ public class MotorSimulacion {
 
             partido.registrarEvento(new EventoDeportivo(tipo, jugador, equipoDelJugador, minuto));
         }
-        minutoBase += 45; // Avanza el minuto base para el siguiente tramo
     }
     private TipoEvento determinarEvento(Equipo atacante, Equipo defensor) {
         double probGol = atacante.getTactica().getProbabilidadGol();
