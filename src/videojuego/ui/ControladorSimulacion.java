@@ -38,6 +38,7 @@ public class ControladorSimulacion {
 
     private Timeline reloj;     // motor del tiempo real; null hasta que se empieza el partido
     private int minutoActual;   // minuto de juego en curso (0 = aun no arranco)
+    private boolean pausado = false; // true cuando el usuario pausó manualmente el reloj
 
     // Nodos que se refrescan en cada minuto (se guardan como campos para actualizarlos).
     private Label lblReloj;
@@ -167,6 +168,7 @@ public class ControladorSimulacion {
     // Reanuda el reloj para el segundo tiempo tras el entretiempo.
     private void continuarSegundoTiempo() {
         fachada.avanzarTramo(); // Entretiempo -> Segundo Tiempo
+        pausado = false; // resetear si el usuario pausó durante el primer tiempo
         if (reloj != null) {
             reloj.play();
         }
@@ -178,6 +180,17 @@ public class ControladorSimulacion {
             reloj.stop();
             reloj = null;
         }
+        pausado = false;
+    }
+
+    private void togglePausa() {
+        if (pausado) {
+            reloj.play();
+        } else {
+            reloj.pause();
+        }
+        pausado = !pausado;
+        refrescar();
     }
 
     // ===================== REFRESCO DE LA VISTA =====================
@@ -219,13 +232,29 @@ public class ControladorSimulacion {
             Button btnContinuar = new Button("Continuar al segundo tiempo");
             btnContinuar.setOnAction(e -> continuarSegundoTiempo());
             panelControl.getChildren().addAll(sub, btnContinuar);
+        } else if (fase.equals("Penales")) {
+            Label enPenales = new Label("=== EMPATE — DEFINICION POR PENALES ===");
+            enPenales.setStyle("-fx-font-weight: bold;");
+            Button btnPenales = new Button("Simular tanda de penales");
+            btnPenales.setOnAction(e -> {
+                fachada.simularTandaPenales();
+                refrescar();
+            });
+            panelControl.getChildren().addAll(enPenales, btnPenales);
         } else if (fase.equals("Finalizado")) {
             Label fin = new Label("Partido finalizado. Resultado guardado en el historial.");
             fin.setStyle("-fx-font-weight: bold;");
             panelControl.getChildren().add(fin);
+            if (partido.getResultadoPenales() != null) {
+                Label lblPenales = new Label("Resultado penales: " + partido.getResultadoPenales());
+                lblPenales.setStyle("-fx-font-weight: bold;");
+                panelControl.getChildren().add(lblPenales);
+            }
         } else { // Primer/Segundo Tiempo con el reloj corriendo
             Label enCurso = new Label("Partido en curso...");
-            panelControl.getChildren().add(enCurso);
+            Button btnPausar = new Button(pausado ? "Reanudar" : "Pausar");
+            btnPausar.setOnAction(e -> togglePausa());
+            panelControl.getChildren().addAll(enCurso, btnPausar);
         }
     }
 

@@ -18,7 +18,7 @@ public class Marcador implements IObservadorPartido {
 
     @Override
     public void actualizar(EventoDeportivo evento) {
-        if (evento.getTipo() == TipoEvento.GOL || evento.getTipo() == TipoEvento.PENAL) {
+        if (evento.getTipo() == TipoEvento.GOL || evento.getTipo() == TipoEvento.PENAL_CONVERTIDO) {
             evento.getJugador().marcarGol();
             if (evento.getEquipo().getNombre().equals(nombreLocal)) {
                 golesLocal++;

@@ -42,6 +42,27 @@ public class MotorSimulacion {
         return generarEvento(partido, minuto);
     }
 
+    // Simula una tanda de penales: 5 remates por equipo (75% de conversion cada uno) y luego
+    // muerte subita hasta que uno convierta y el otro falle en la misma ronda.
+    // Devuelve un String del tipo "Local 4 - 3 Visitante".
+    public String simularTandaPenales(String equipoLocal, String equipoVisitante) {
+        int golesLocal = 0;
+        int golesVisitante = 0;
+        for (int i = 0; i < 5; i++) {
+            if (random.nextDouble() < 0.75) golesLocal++;
+            if (random.nextDouble() < 0.75) golesVisitante++;
+        }
+        int ronda = 0;
+        while (golesLocal == golesVisitante && ronda < 200) {
+            boolean localConvierte = random.nextDouble() < 0.75;
+            boolean visitanteConvierte = random.nextDouble() < 0.75;
+            if (localConvierte) golesLocal++;
+            if (visitanteConvierte) golesVisitante++;
+            ronda++;
+        }
+        return equipoLocal + " " + golesLocal + " - " + golesVisitante + " " + equipoVisitante;
+    }
+
     // Logica compartida por simularTramo() y simularMinuto(): elige atacante/defensor, decide
     // el tipo de evento segun las tacticas, selecciona el jugador y registra el evento en el
     // partido. Devuelve el evento creado, o null si no habia jugador disponible.
@@ -56,6 +77,7 @@ public class MotorSimulacion {
         }
 
         TipoEvento tipo = determinarEvento(atacante, defensor);
+        if (tipo == null) return null; // rango residual: ciclo sin acontecimiento notable
 
         //Faltas y tarjetas las comete el defensor, el resto el atacante
         Equipo equipoDelJugador = (tipo == TipoEvento.FALTA ||
@@ -64,6 +86,17 @@ public class MotorSimulacion {
                                     ? defensor : atacante;
         Jugador jugador = obtenerJugadorDisponible(equipoDelJugador, tipo);
         if (jugador == null) return null; // Si no hay jugadores disponibles, no hay evento
+
+        // Para PENAL: registrar el cobro y luego el resultado del remate
+        if (tipo == TipoEvento.PENAL) {
+            partido.registrarEvento(new EventoDeportivo(TipoEvento.PENAL, jugador, equipoDelJugador, minuto));
+            TipoEvento resultado = random.nextDouble() < 0.75
+                    ? TipoEvento.PENAL_CONVERTIDO
+                    : TipoEvento.PENAL_FALLADO;
+            EventoDeportivo eventoResultado = new EventoDeportivo(resultado, jugador, equipoDelJugador, minuto);
+            partido.registrarEvento(eventoResultado);
+            return eventoResultado;
+        }
 
         EventoDeportivo evento = new EventoDeportivo(tipo, jugador, equipoDelJugador, minuto);
         partido.registrarEvento(evento);
@@ -83,7 +116,7 @@ public class MotorSimulacion {
         if (r < probGol + 0.04 + probFalta) return TipoEvento.FALTA;
         if (r < probGol + 0.04 + probFalta + probLesion) return TipoEvento.LESION;
 
-        return TipoEvento.FALTA; // Evento por defecto si no se cumple ninguna condición
+        return null; // rango residual (~25%): el ciclo pasa sin acontecimiento registrable
     }
 
     // Selecciona un jugador disponible con peso segun su posicion y el tipo de evento.

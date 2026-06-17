@@ -39,7 +39,7 @@ public class PartidoDATA {
         int golesVisitante = 0;
         for (int i = 0; i < eventos.size(); i++) {
             EventoDeportivo ev = eventos.get(i);
-            if (ev.getTipo() == TipoEvento.GOL || ev.getTipo() == TipoEvento.PENAL) {
+            if (ev.getTipo() == TipoEvento.GOL || ev.getTipo() == TipoEvento.PENAL_CONVERTIDO) {
                 if (ev.getEquipo().getNombre().equals(nombreLocal)) {
                     golesLocal++;
                 } else {
@@ -48,8 +48,8 @@ public class PartidoDATA {
             }
         }
 
-        String sql = "INSERT INTO partidos (equipo_local, equipo_visitante, goles_local, goles_visitante, modo_juego, estado_final) "
-                + "VALUES (?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO partidos (equipo_local, equipo_visitante, goles_local, goles_visitante, modo_juego, estado_final, penales) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = conexion.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, nombreLocal);
             ps.setString(2, partido.getEquipoVisitante().getNombre());
@@ -57,6 +57,7 @@ public class PartidoDATA {
             ps.setInt(4, golesVisitante);
             ps.setString(5, partido.getModoJuego());
             ps.setString(6, partido.getEstadoActual().getNombre());
+            ps.setString(7, partido.getResultadoPenales());
             ps.executeUpdate();
 
             long partidoId;
@@ -88,12 +89,12 @@ public class PartidoDATA {
     }
 
     public List<Partido> obtenerTodos() {
-        String sql = "SELECT id, equipo_local, equipo_visitante, modo_juego FROM partidos";
+        String sql = "SELECT id, equipo_local, equipo_visitante, modo_juego, penales FROM partidos";
         return consultarPartidos(sql, null);
     }
 
     public List<Partido> buscarPorEquipo(String nombreEquipo) {
-        String sql = "SELECT id, equipo_local, equipo_visitante, modo_juego FROM partidos "
+        String sql = "SELECT id, equipo_local, equipo_visitante, modo_juego, penales FROM partidos "
                 + "WHERE equipo_local = ? OR equipo_visitante = ?";
         return consultarPartidos(sql, nombreEquipo);
     }
@@ -125,7 +126,8 @@ public class PartidoDATA {
                             rs.getLong("id"),
                             rs.getString("equipo_local"),
                             rs.getString("equipo_visitante"),
-                            rs.getString("modo_juego")});
+                            rs.getString("modo_juego"),
+                            rs.getString("penales")});
                 }
             }
         } catch (SQLException e) {
@@ -134,7 +136,7 @@ public class PartidoDATA {
         List<Partido> resultado = new ArrayList<>();
         for (int i = 0; i < filas.size(); i++) {
             Object[] f = filas.get(i);
-            resultado.add(reconstruirPartido((Long) f[0], (String) f[1], (String) f[2], (String) f[3]));
+            resultado.add(reconstruirPartido((Long) f[0], (String) f[1], (String) f[2], (String) f[3], (String) f[4]));
         }
         return resultado;
     }
@@ -143,7 +145,7 @@ public class PartidoDATA {
     // imprimen mensajes de ciclo de vida; como aca solo rearmamos datos para el historial,
     // silenciamos System.out durante la reconstruccion para no ensuciar la salida. El swap
     // de System.out queda contenido en la capa de persistencia (no se toca el modelo).
-    private Partido reconstruirPartido(long id, String local, String visitante, String modo) {
+    private Partido reconstruirPartido(long id, String local, String visitante, String modo, String penales) {
         PrintStream original = System.out;
         try {
             System.setOut(new PrintStream(OutputStream.nullOutputStream()));
@@ -152,6 +154,9 @@ public class PartidoDATA {
             Estadio estadio = new Estadio("Sin especificar", "Sin especificar", 0);
             Partido partido = new Partido(equipoLocal, equipoVisitante, estadio, modo);
             cargarEventos(id, partido, equipoLocal, equipoVisitante);
+            if (penales != null && !penales.isEmpty()) {
+                partido.setResultadoPenales(penales);
+            }
             // El historial solo guarda partidos finalizados; reflejamos ese estado final.
             partido.setEstado(new EstadoFinalizado());
             return partido;

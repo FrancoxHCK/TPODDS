@@ -80,13 +80,6 @@ public class ControladorGestionEquipos {
         VBox cajaJugadores = new VBox(5, new Label("Jugadores del equipo seleccionado:"), listaJugadores);
         HBox listas = new HBox(20, cajaEquipos, cajaJugadores);
 
-        // --- Zona 2b: cambiar la tactica de base del equipo seleccionado (se persiste) ---
-        ComboBox<String> cbTactica = new ComboBox<>();
-        cbTactica.getItems().setAll("Ofensiva", "Defensiva", "Equilibrada");
-        cbTactica.setPromptText("Tactica");
-        Button btnCambiarTactica = new Button("Cambiar tactica del equipo seleccionado");
-        HBox formTactica = new HBox(10, new Label("Tactica:"), cbTactica, btnCambiarTactica);
-
         // --- Zona 3: agregar jugador al equipo seleccionado ---
         TextField tfNombreJugador = new TextField();
         tfNombreJugador.setPromptText("Nombre del jugador");
@@ -121,31 +114,6 @@ public class ControladorGestionEquipos {
             mostrarMensaje("Equipo '" + nombreEquipo + "' y estadio '" + nombreEstadio + "' registrados.");
         });
 
-        // Al seleccionar un equipo, el combo muestra su tactica actual.
-        listaEquipos.getSelectionModel().selectedItemProperty().addListener(
-                (obs, anterior, seleccionado) -> {
-                    if (seleccionado != null) {
-                        cbTactica.setValue(seleccionado.getTactica().getNombre());
-                    }
-                });
-
-        btnCambiarTactica.setOnAction(e -> {
-            Equipo equipo = listaEquipos.getSelectionModel().getSelectedItem();
-            if (equipo == null) {
-                mostrarMensaje("Primero selecciona un equipo de la lista.");
-                return;
-            }
-            String tactica = cbTactica.getValue();
-            if (tactica == null) {
-                mostrarMensaje("Elegi una tactica del combo.");
-                return;
-            }
-            // Pasa por la fachada: mapea el nombre, aplica y persiste la tactica del equipo.
-            fachada.cambiarTacticaEquipo(equipo, tactica);
-            listaEquipos.refresh(); // la celda muestra la tactica: la refrescamos
-            mostrarMensaje("Tactica de " + equipo.getNombre() + " cambiada a " + tactica + ".");
-        });
-
         btnAgregarJugador.setOnAction(e -> {
             Equipo equipo = listaEquipos.getSelectionModel().getSelectedItem();
             if (equipo == null) {
@@ -177,7 +145,6 @@ public class ControladorGestionEquipos {
         VBox raiz = new VBox(15, titulo,
                 new Label("Registrar equipo nuevo"), formEquipo,
                 listas,
-                new Label("Cambiar tactica del equipo"), formTactica,
                 new Label("Agregar jugador"), formJugador,
                 lblMensaje, botonVolver);
         raiz.setPadding(new Insets(25));

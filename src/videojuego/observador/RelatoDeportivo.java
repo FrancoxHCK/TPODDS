@@ -30,7 +30,9 @@ public class RelatoDeportivo implements IObservadorPartido {
             case TARJETA_AMARILLA -> "Min " + min + " - Tarjeta AMARILLA para " + jugador;
             case TARJETA_ROJA -> "Min " + min + " - Tarjeta ROJA para " + jugador + ". Se va expulsado.";
             case LESION -> "Min " + min + " - " + jugador + " sale lesionado del campo.";
-            case PENAL -> "Min " + min + " - PENAL a favor de " + equipo + ". Ejecuta " + jugador;
+            case PENAL -> "Min " + min + " - PENAL a favor de " + equipo + ". Va a ejecutar " + jugador;
+            case PENAL_CONVERTIDO -> "Min " + min + " - GOOOL de PENAL! Lo convierte " + jugador + " (" + equipo + ")";
+            case PENAL_FALLADO -> "Min " + min + " - Penal FALLADO por " + jugador + ". El arquero lo ataja.";
         };
     }
 

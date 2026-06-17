@@ -43,11 +43,11 @@ public class ControladorHistorial {
             return raizVacia;
         }
 
-        // Cada item replica el texto de mostrarHistorial(): resumen + estado final.
+        // Cada item muestra el modo de juego, el resumen y el estado final.
         ListView<String> lista = new ListView<>();
         for (int i = 0; i < historial.size(); i++) {
             Partido p = historial.get(i);
-            lista.getItems().add((i + 1) + ". " + p.getResumenTexto()
+            lista.getItems().add((i + 1) + ". [" + p.getModoJuego() + "] " + p.getResumenTexto()
                     + " | Estado: " + p.getEstadoActual().getNombre());
         }
         lista.setPrefHeight(320);

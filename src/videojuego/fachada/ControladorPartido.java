@@ -2,6 +2,7 @@ package videojuego.fachada;
 
 import videojuego.builder.PartidoBuilder;
 import videojuego.estado.EstadoFinalizado;
+import videojuego.estado.EstadoPenales;
 import videojuego.modelo.Equipo;
 import videojuego.modelo.Estadio;
 import videojuego.modelo.EventoDeportivo;
@@ -93,15 +94,56 @@ ControladorPartido {
 
     // Avanza el partido al siguiente tramo SIN simular eventos en bloque (a diferencia de
     // simularTramo). Lo usa el modo en tiempo real: cuando el reloj llega al final de un tramo,
-    // la UI pide pasar al siguiente estado. Si el partido queda finalizado, se persiste.
+    // la UI pide pasar al siguiente estado. En torneo con empate, en lugar de finalizar
+    // directamente se pasa a la tanda de penales.
     public void avanzarTramo() {
         if (partido == null) {
             return;
         }
         partido.avanzarEstado();
-        if (partido.getEstadoActual().getNombre().equals("Finalizado")) {
+        String fase = partido.getEstadoActual().getNombre();
+        if (fase.equals("Finalizado")) {
+            if (esTorneoConEmpate()) {
+                partido.setEstado(new EstadoPenales());
+                return; // no guardar aun: falta simular la tanda
+            }
             new PartidoDATA().guardar(partido);
         }
+    }
+
+    // Simula la tanda de penales (modo torneo, empate en 90 min). Persiste el partido al final.
+    public void simularTandaPenales() {
+        if (partido == null) return;
+        String resultado = motor.simularTandaPenales(
+                partido.getEquipoLocal().getNombre(),
+                partido.getEquipoVisitante().getNombre());
+        partido.setResultadoPenales(resultado);
+        partido.setEstado(new EstadoFinalizado());
+        new PartidoDATA().guardar(partido);
+    }
+
+    public boolean estaEnPenales() {
+        return partido != null && "Penales".equals(partido.getEstadoActual().getNombre());
+    }
+
+    // Devuelve true si el partido es de torneo y termino en empate reglamentario.
+    private boolean esTorneoConEmpate() {
+        if (!"Torneo".equals(partido.getModoJuego())) return false;
+        int golesLocal = 0;
+        int golesVisitante = 0;
+        String nombreLocal = partido.getEquipoLocal().getNombre();
+        List<EventoDeportivo> eventos = partido.getEventos();
+        for (int i = 0; i < eventos.size(); i++) {
+            EventoDeportivo ev = eventos.get(i);
+            if (ev.getTipo() == TipoEvento.GOL || ev.getTipo() == TipoEvento.PENAL_CONVERTIDO) {
+                if (ev.getEquipo().getNombre().equals(nombreLocal)) {
+                    golesLocal++;
+                } else {
+                    golesVisitante++;
+                }
+            }
+        }
+        return golesLocal == golesVisitante;
     }
 
     // Variante por nombre del cambio de tactica en tiempo real, pensada para la UI:
@@ -194,6 +236,10 @@ ControladorPartido {
                 && !partido.getEstadoActual().getNombre().equals("Primer Tiempo")) {
             lineas.add("───── Entretiempo ─────");
         }
+        if (partido.getResultadoPenales() != null) {
+            lineas.add("───── Penales ─────");
+            lineas.add(partido.getResultadoPenales());
+        }
         return lineas;
     }
 
@@ -232,8 +278,12 @@ ControladorPartido {
             return min + "Tarjeta ROJA para " + jugador + ". Se va expulsado.";
         } else if (tipo == TipoEvento.LESION) {
             return min + jugador + " sale lesionado del campo.";
-        } else { // PENAL
-            return min + "PENAL a favor de " + equipo + ". Ejecuta " + jugador;
+        } else if (tipo == TipoEvento.PENAL) {
+            return min + "PENAL a favor de " + equipo + ". Va a ejecutar " + jugador;
+        } else if (tipo == TipoEvento.PENAL_CONVERTIDO) {
+            return min + "GOOOL de PENAL! Lo convierte " + jugador + " (" + equipo + ")";
+        } else { // PENAL_FALLADO
+            return min + "Penal FALLADO por " + jugador + ". El arquero lo ataja.";
         }
     }
 

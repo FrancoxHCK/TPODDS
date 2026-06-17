@@ -13,6 +13,7 @@ public class Partido {
     private IEstadoPartido estadoActual;
     private List<IObservadorPartido> observadores;
     private List<EventoDeportivo> eventos;
+    private String resultadoPenales; // null si el partido no fue a penales
 
     public Partido(Equipo local, Equipo visitante, Estadio estadio, String modoJuego) {
         this.equipoLocal = local;
@@ -57,7 +58,7 @@ public class Partido {
         int golesLocal = 0;
         int golesVisitante = 0;
         for (EventoDeportivo evento : eventos) {
-            if (evento.getTipo() == TipoEvento.GOL || evento.getTipo() == TipoEvento.PENAL) {
+            if (evento.getTipo() == TipoEvento.GOL || evento.getTipo() == TipoEvento.PENAL_CONVERTIDO) {
                 if (evento.getEquipo().getNombre().equals(equipoLocal.getNombre())) {
                     golesLocal++;
                 } else {
@@ -65,9 +66,13 @@ public class Partido {
                 }
             }
         }
-        return equipoLocal.getNombre() + " " + golesLocal + " - " + golesVisitante + " "
+        String resumen = equipoLocal.getNombre() + " " + golesLocal + " - " + golesVisitante + " "
                 + equipoVisitante.getNombre()
                 + " | Eventos: " + eventos.size();
+        if (resultadoPenales != null && !resultadoPenales.isEmpty()) {
+            resumen += " | Penales: " + resultadoPenales;
+        }
+        return resumen;
     }
 
     public Equipo getEquipoLocal() { return equipoLocal; }
@@ -76,4 +81,6 @@ public class Partido {
     public String getModoJuego() { return modoJuego; }
     public IEstadoPartido getEstadoActual() { return estadoActual; }
     public List<EventoDeportivo> getEventos() { return eventos; }
+    public String getResultadoPenales() { return resultadoPenales; }
+    public void setResultadoPenales(String resultadoPenales) { this.resultadoPenales = resultadoPenales; }
 }

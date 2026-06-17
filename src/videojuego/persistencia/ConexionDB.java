@@ -93,6 +93,10 @@ public class ConexionDB {
         } catch (SQLException e) {
             throw new RuntimeException("No se pudieron crear las tablas: " + e.getMessage(), e);
         }
+        // Migracion idempotente: agrega la columna penales si no existe (bases existentes).
+        try (Statement st = conexion.createStatement()) {
+            st.execute("ALTER TABLE partidos ADD COLUMN penales TEXT");
+        } catch (SQLException ignorado) { /* columna ya existe */ }
     }
 }
 // Por que: una sola instancia garantiza que todos los DAOs usen la misma Connection a simulador.db.

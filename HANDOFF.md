@@ -2,39 +2,25 @@
 
 Documento para retomar el proyecto en otra sesión. Describe el **estado real del código** (no el deseado), los patrones aplicados, y el **gap entre lo implementado y el alcance definido**. Java 21. **Persistencia: SQLite vía JDBC** (única dependencia externa: el driver `sqlite-jdbc` en `lib/`).
 
-> **Última actualización:** mejoras en la GUI. (1) El campo de posición de jugador en Gestión de Equipos es ahora un `ComboBox` con 4 roles fijos: **Delantero, Mediocampista, Defensor, Arquero**. (2) En Configurar Partido, al elegir el equipo local el estadio **se auto-asigna automáticamente** al estadio vinculado a ese equipo. (3) El `MotorSimulacion` ahora usa **selección ponderada por rol**: los goles/penales prefieren Delanteros, las faltas/tarjetas prefieren Defensores, con pesos diferenciados para cada posición. El vínculo equipo→estadio se persiste en `equipos.estadio_nombre` al registrar. Antes de esto: migración de persistencia a SQLite/JDBC completada y verificada end-to-end.
+> **Última actualización (2025-06-17):** Cuatro nuevas funcionalidades: (1) **Penales en torneo** — empate al 90' deriva en `EstadoPenales` (5 remates + muerte súbita); (2) **Resultado de penal en relato** — evento `PENAL` siempre viene seguido de `PENAL_CONVERTIDO` o `PENAL_FALLADO`; (3) **Botón Pausar/Reanudar** durante la simulación en tiempo real; (4) **Selector de táctica eliminado de Gestión de Equipos** (la táctica es una opción del partido, no del equipo base). El historial ahora muestra el modo `[Amistoso]`/`[Torneo]` y el resultado de penales cuando corresponde. Anterior: GUI funcional completa, simulación en tiempo real, SQLite/JDBC.
 
 ---
 
 ## 1. Cómo se ejecuta hoy
 
-- **`src/Main.java` es un menú de consola interactivo** (`Scanner`), única vía de entrada. Opera todo a través de la fachada `ControladorPartido` (nunca instancia DAOs). Menú principal: 1) Gestión de equipos/jugadores, 2) Configurar y jugar partido, 3) Ver historial, 4) Salir.
-- **Requiere el driver SQLite** en el classpath: `lib/sqlite-jdbc-3.42.0.0.jar` (versionado en el repo). El separador de classpath es `;` en Windows y `:` en Linux/Mac.
-- Compilar/ejecutar en **Windows (PowerShell)**:
-  ```powershell
-  Remove-Item -Recurse -Force bin; New-Item -ItemType Directory bin | Out-Null
-  Get-ChildItem -Recurse src -Filter *.java | ForEach-Object FullName > sources.txt
-  javac -cp "lib\sqlite-jdbc-3.42.0.0.jar" -d bin "@sources.txt"
-  java -cp "bin;lib\sqlite-jdbc-3.42.0.0.jar" Main
-  ```
-- Compilar/ejecutar en **Linux/Mac (bash)**:
-  ```bash
-  rm -rf bin && mkdir bin
-  find src -name "*.java" > sources.txt
-  javac -cp lib/sqlite-jdbc-3.42.0.0.jar -d bin @sources.txt
-  java -cp "bin:lib/sqlite-jdbc-3.42.0.0.jar" Main
-  ```
-- Al primer arranque se crea `simulador.db` en la raíz (gitignored, se regenera). La compilación no necesita el driver (no se importa `org.sqlite.*`), pero la ejecución sí (el driver se registra por `ServiceLoader` en runtime).
-- **Flujo del menú:** el usuario registra equipos (cada alta crea además su estadio), agrega jugadores (número de camiseta autoasignado por orden), configura un partido eligiendo local/visitante/estadio/tácticas/modo (con el estado de la selección visible en pantalla), y lo juega por tramos con **entretiempo interactivo** (`=== ENTRETIEMPO ===` → cambiar táctica local/visitante o continuar). Al finalizar el partido se persiste solo y se puede consultar el historial desde el menú.
-- Internamente, `configurarPartido(...)` también persiste ambos equipos y todos sus jugadores en **SQLite** vía los DAOs (todo encapsulado tras `ControladorPartido`).
-- **Recorrido del partido (máquina de estados):** un partido completo son **3** llamadas a `simularTramo()` — 1er tiempo (simula) → entretiempo (avanza sin simular) → 2do tiempo (simula y finaliza/guarda). El menú las encadena: una para el 1er tiempo, y tras el entretiempo dos seguidas para dejar atrás el entretiempo y jugar el 2do tiempo.
+- **`src/Main.java` es un lanzador mínimo** (sin `extends Application`): delega directamente en `videojuego.ui.MainApp.main(args)`. **La única vía de entrada es la GUI JavaFX** — no existe menú de consola en esta versión. Esta estructura (lanzador separado que llama a `MainApp`) evita el error `JavaFX runtime components are missing` que aparece al invocar `MainApp` como clase principal desde algunos IDEs.
+- **Requiere** el driver SQLite (`lib/sqlite-jdbc-3.42.0.0.jar`) y el SDK JavaFX 21 en el module-path (ambos versionados en el repo, proyecto self-contained).
+- Al primer arranque se crea `simulador.db` en la raíz (gitignored, se regenera sola). La compilación no necesita el driver (no se importa `org.sqlite.*`), pero la ejecución sí (el driver se registra por `ServiceLoader` en runtime).
+- **Flujo de la GUI:** el usuario registra equipos con estadio desde "Gestión de Equipos" (permite agregar jugadores con posición; la táctica se configura en el partido, no aquí). En "Configurar Partido" elige local/visitante/tácticas/modo; el estadio se auto-asigna al equipo local. En "Simulación" el partido corre **en tiempo real** (reloj de 200 ms/minuto, ~9 s por tramo); las tácticas se pueden cambiar en cualquier momento y el reloj se puede **pausar/reanudar**. En "Historial" se consultan los partidos finalizados con modo de juego, resultado (incluye penales si aplica) y estado final.
+- Internamente, `configurarPartido(...)` persiste ambos equipos y sus jugadores en SQLite vía los DAOs (todo encapsulado tras `ControladorPartido`).
+- **Recorrido del partido (máquina de estados):** Primer Tiempo (min 1-45) → Entretiempo → Segundo Tiempo (min 46-90) → Finalizado. En modo Torneo con empate: Segundo Tiempo → Penales (usuario lanza la tanda) → Finalizado (se persiste). Los comandos de compilación/ejecución están en la sección 1.b.
 
 ---
 
 ## 1.b Interfaz gráfica (JavaFX) — en construcción
 
-- **Punto de entrada gráfico:** `src/videojuego/ui/MainApp.java` (`extends Application`). Convive con `Main.java` (consola), que **se mantiene intacto**. Son dos vías de entrada independientes: para la consola se ejecuta `Main`, para la GUI se ejecuta `videojuego.ui.MainApp`.
-- **Estado actual:** navegación completa + lógica funcional en todas las pantallas. Gestión de Equipos permite registrar equipos con estadio, cambiar táctica y agregar jugadores con posición desde un `ComboBox` (4 roles fijos). Configurar Partido permite elegir equipos, táctica inicial, modo, y **auto-asigna el estadio** al elegir el equipo local. Simulación muestra marcador, relato y estadísticas, permite cambiar táctica en entretiempo. Historial lista los partidos guardados.
+- **Punto de entrada gráfico:** `src/videojuego/ui/MainApp.java` (`extends Application`). `Main.java` (raíz del proyecto, sin paquete) delega directamente en `MainApp.main(args)`; **no hay menú de consola** en esta versión. El ejecutable siempre es el modo GUI.
+- **Estado actual:** navegación completa + lógica funcional en todas las pantallas. Gestión de Equipos permite registrar equipos con estadio y agregar jugadores con posición desde un `ComboBox` (4 roles fijos); la táctica **no** se configura aquí. Configurar Partido permite elegir equipos, táctica inicial de cada equipo, modo, y **auto-asigna el estadio** al elegir el equipo local. Simulación muestra marcador, relato (incluye resultado de cada penal) y estadísticas; permite cambiar táctica y pausar el reloj. En modo Torneo con empate, ofrece simular la tanda de penales. Historial lista los partidos con prefijo `[Amistoso]`/`[Torneo]` y penales cuando corresponde.
 - **Navegación:** un único `Stage` con una única `Scene`; navegar = `escena.setRoot(...)`. El contrato está en `videojuego.ui.Navegador` (interfaz + enum `Pantalla` anidado); `MainApp` lo implementa y se lo pasa a cada controlador. La lógica (cuando llegue) seguirá pasando por la fachada `ControladorPartido` (única instancia compartida que `MainApp` crea y reparte a los controladores). **JavaFX puro, sin FXML:** cada controlador arma su vista por código en `getVista()`.
 - **Dependencia: JavaFX 21 SDK — versionado en el repo (Windows + Mac).** El proyecto es **self-contained**: clonás y compila/corre sin instalar el SDK. Como el SDK no es Java puro (trae **librerías nativas** por SO), hay **dos builds** versionados, y cada uno apunta a la carpeta de su sistema operativo:
   - `lib/javafx-sdk-21-win/` → **Windows x64** (las `.dll` nativas viven en su `bin/`).
@@ -95,12 +81,12 @@ Como el SDK se baja como jars sueltos (sin Maven/Gradle), **IntelliJ no lo detec
 | `modelo` | `Partido`, `Equipo`, `Jugador`, `Estadio`, `EventoDeportivo`, `TipoEvento` (enum), `EstadoJugador` (enum) | Dominio |
 | `fachada` | `ControladorPartido` | **Facade** — orquesta builder + motor + persistencia |
 | `builder` | `IBuilder<T>`, `PartidoBuilder` | **Builder** — arma `Partido` con observadores |
-| `estado` | `IEstadoPartido`, `EstadoPrimerTiempo`, `EstadoEntretiempo`, `EstadoSegundoTiempo`, `EstadoFinalizado` | **State** |
+| `estado` | `IEstadoPartido`, `EstadoPrimerTiempo`, `EstadoEntretiempo`, `EstadoSegundoTiempo`, `EstadoPenales`, `EstadoFinalizado` | **State** |
 | `tactica` | `ITactica`, `TacticaOfensiva`, `TacticaDefensiva`, `TacticaEquilibrada` | **Strategy** |
 | `observador` | `IObservadorPartido`, `Marcador`, `Estadisticas`, `RelatoDeportivo` | **Observer** |
 | `simulacion` | `MotorSimulacion` | Genera eventos por tramo (ruleta probabilística) |
 | `persistencia` | `ConexionDB` (**Singleton**, posee la `Connection` JDBC), `PartidoDATA`, `EquipoDATA`, `JugadorDATA`, `EstadioDATA` (**DAO**) | **Persistencia en SQLite/JDBC** (ver sección 10) |
-| `ui` | `MainApp`, `Navegador` (interfaz + enum `Pantalla`), `ControladorMenuPrincipal`, `ControladorConfigurarPartido`, `ControladorSimulacion`, `ControladorGestionEquipos`, `ControladorHistorial` | **GUI JavaFX en construcción** (ver sección 1.b). Esqueleto de navegación funcionando; vistas mínimas sin lógica. Toda la lógica pasará por `ControladorPartido`. |
+| `ui` | `MainApp`, `Navegador` (interfaz + enum `Pantalla`), `ControladorMenuPrincipal`, `ControladorConfigurarPartido`, `ControladorSimulacion`, `ControladorGestionEquipos`, `ControladorHistorial` | **GUI JavaFX completa y funcional** (ver sección 1.b). Toda la lógica pasa por la fachada `ControladorPartido`. |
 
 > El paquete `model` con `Clase.java` (leftover) **ya fue eliminado** (B8).
 
@@ -111,13 +97,13 @@ Como el SDK se baja como jars sueltos (sin Maven/Gradle), **IntelliJ no lo detec
 1. **`ControladorPartido.configurarPartido(local, visitante, estadio, modoJuego)`** usa `PartidoBuilder` fluido (`setEquipoLocal/Visitante/Estadio/ModoJuego`, `conMarcador/conEstadisticas/conRelato`). El `build()` crea el `Partido` y le suscribe los 3 observadores. El controlador **retiene el builder** para poder consultar marcador/estadísticas después (fix B1). Además persiste ambos equipos y sus jugadores (Tarea 2).
 2. El `Partido` nace en `EstadoPrimerTiempo` y su constructor **ya llama `iniciar(this)`** (fix B2), por lo que se imprime "=== Comienza el Primer Tiempo ===".
 3. **`simularTramo()`**: si el estado `permiteSimular()`, llama `MotorSimulacion.simularTramo(partido)` y luego `avanzarEstado()`.
-   - Motor genera 3–8 eventos por tramo. Por cada uno: elige atacante/defensor al azar, `determinarEvento()` tira `random.nextDouble()` contra las probabilidades de las tácticas (las lee **en tiempo real**, evento por evento) y devuelve un `TipoEvento` (GOL, PENAL, FALTA, TARJETA_AMARILLA, TARJETA_ROJA, LESION).
+   - Motor genera 3–8 eventos por tramo. Por cada uno: elige atacante/defensor al azar, `determinarEvento()` tira `random.nextDouble()` contra las probabilidades de las tácticas (las lee **en tiempo real**, evento por evento) y devuelve un `TipoEvento`. Cuando el tipo es `PENAL`, el motor registra inmediatamente un segundo evento: `PENAL_CONVERTIDO` (75%) o `PENAL_FALLADO` (25%). Solo `PENAL_CONVERTIDO` suma gol al marcador.
    - Faltas/tarjetas se asignan a un jugador **DISPONIBLE** del defensor; el resto al atacante. Si no hay disponibles, saltea el evento.
    - La selección del jugador es **ponderada por posición**: GOL/PENAL → peso Delantero×4, Mediocampista×2, Defensor×0.5, Arquero×0.05; FALTA/tarjetas → peso Defensor×4, Mediocampista×1.5, Delantero×0.5, Arquero×0.2; LESION → peso uniforme.
    - `partido.registrarEvento(...)` agrega al historial y notifica observadores.
 4. **Entretiempo**: `permiteSimular()==false` → solo `avanzarEstado()` a 2do tiempo (sin simular).
 5. **2do tiempo**: simula con `minutoBase` ya +45, `avanzarEstado()` → `EstadoFinalizado`.
-6. Al detectar estado "Finalizado", `ControladorPartido` llama `new PartidoDATA().guardar(partido)`.
+6. Al detectar estado "Finalizado" en `avanzarTramo()`: si es modo **Torneo** y el marcador está empatado, se redirige al nuevo `EstadoPenales` en lugar de persistir. La UI muestra botón "Simular tanda de penales"; al pulsarlo `ControladorPartido.simularTandaPenales()` usa `MotorSimulacion.simularTandaPenales()` (5 remates×equipo + muerte súbita), guarda el resultado en `Partido.resultadoPenales`, transiciona a `EstadoFinalizado` y persiste. Si no hay empate o es amistoso, se persiste directamente en `EstadoFinalizado`.
 
 **Observadores:**
 - `Marcador`: cuenta goles local/visitante (GOL y PENAL suman gol) y marca `jugador.marcarGol()`. Tiene `getResultado()`. **Accesible** vía `ControladorPartido.getMarcador()` (fix B1).
@@ -140,7 +126,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta
 | # | Requisito del alcance (README "Incluye") | Estado | Detalle |
 |---|---|---|---|
 | 1 | Registro y administración de equipos, jugadores y estadios | ✅ | El menú permite **alta y consulta** de equipos, jugadores y estadios vía la fachada (`registrar/obtener...`). Baja/edición existen en los DAOs (`eliminar`) pero no se expusieron en el menú (no pedido explícitamente). |
-| 2 | Configuración de partido: elegir equipos, táctica inicial y modo (amistoso/torneo) | ✅ | El submenú "Configurar y jugar" deja elegir local/visitante/estadio, táctica inicial de cada equipo y modo. El `modoJuego` se elige y se guarda, pero **aún no altera la lógica** (B4, opcional). |
+| 2 | Configuración de partido: elegir equipos, táctica inicial y modo (amistoso/torneo) | ✅ | El submenú "Configurar y jugar" deja elegir local/visitante/estadio, táctica inicial de cada equipo y modo. El `modoJuego` activa la tanda de penales en empate (Torneo) y aparece en el historial. |
 | 3 | Simulación representativa por tramos | ✅ | Motor + State funcionan. |
 | 4 | Cambio de táctica DURANTE el partido desde la interfaz | ✅ | El menú de **entretiempo** invoca `cambiarTactica(Equipo, ITactica)` (con guarda de partido finalizado); el motor lee la táctica en tiempo real, así que impacta en el 2do tiempo. |
 | 5 | Visualización en tiempo real de marcador, relato y estadísticas | ✅ | El **relato** se imprime evento por evento; el menú muestra **marcador** (`getMarcador()`) y **estadísticas** (`getEstadisticas()`) al cierre del 1er tiempo y al final. |
@@ -148,9 +134,9 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta
 | 7 | Consulta de historial | ✅ | El menú llama `mostrarHistorial()` (sobre `obtenerHistorial()`/`getResumenTexto()`): lista cada partido con resultado, total de eventos y estado final. |
 
 ### Requisitos extra pedidos explícitamente
-- ✅ **Elegir los equipos** — el menú lista los registrados y permite elegir local y visitante.
-- ✅ **Elegir las tácticas en tiempo real** — el menú de entretiempo dispara `cambiarTactica()` por equipo; el motor la aplica de inmediato.
-- 🟡 **Elegir tipo de partido: amistoso o torneo** — ya se elige en el menú (1=Amistoso, 2=Torneo), pero `modoJuego` sigue sin comportamiento diferenciado (B4, opcional).
+- ✅ **Elegir los equipos** — la UI lista los registrados y permite elegir local y visitante.
+- ✅ **Elegir las tácticas en tiempo real** — combos en la pantalla de simulación disparan `cambiarTacticaEnVivo()` por equipo; el motor la aplica de inmediato.
+- ✅ **Elegir tipo de partido: amistoso o torneo** — se elige en Configurar Partido; en Torneo el empate deriva en tanda de penales. Historial indica el modo.
 
 ---
 
@@ -164,17 +150,17 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta
 - ✅ **B5 — Sin punto de interacción entre tramos.** Resuelto por el menú de **entretiempo** del `Main` interactivo: tras el 1er tiempo se ofrece cambiar tácticas o continuar antes de simular el 2do tiempo.
 
 ### Pendientes
-- **B4 — `modoJuego` (amistoso/torneo) no tiene comportamiento.** Es un String que se elige y se guarda pero no afecta nada. Un "torneo" real implicaría fixture/tabla/llaves; hoy no existe.
-- **B6 — Drift de documentación.** El README nombra `ConstructorPartido` e `IObservador`, pero el código usa `PartidoBuilder` e `IObservadorPartido`. Unificar nombres.
+- ✅ **B4 — `modoJuego` con comportamiento diferenciado.** Torneo en empate → tanda de penales (5 remates + muerte súbita). Historial muestra prefijo `[Amistoso]`/`[Torneo]`. Un fixture/tabla de posiciones real sigue fuera de alcance.
+- ✅ **B6 — Drift de documentación.** Resuelto: README actualizado para usar los nombres correctos del código (`PartidoBuilder` e `IObservadorPartido`).
 - ✅ **B7 — Capa `ui`.** Los 5 controladores JavaFX tienen lógica completa. La GUI es funcional de punta a punta.
-- **B9 — Default silencioso en `determinarEvento()`.** Si no cae en ningún rango devuelve `FALTA`, lo que puede sesgar el conteo. Revisar si es intencional.
+- ✅ **B9 — Default silencioso en `determinarEvento()`.** Resuelto: el rango residual (~25%) ahora devuelve `null`; `generarEvento()` lo interpreta como "ciclo sin acontecimiento" y retorna sin registrar evento. Sin sesgo en el conteo de faltas.
 
 ---
 
 ## 6. Patrones aplicados (para la defensa del TPO)
 - **Facade**: `ControladorPartido`.
 - **Builder**: `IBuilder<T>` + `PartidoBuilder`.
-- **State**: `IEstadoPartido` + 4 estados.
+- **State**: `IEstadoPartido` + 5 estados (`EstadoPenales` agregado para la tanda en torneo).
 - **Strategy**: `ITactica` + 3 tácticas.
 - **Observer**: `IObservadorPartido` + `Marcador`/`Estadisticas`/`RelatoDeportivo`.
 - **Singleton + DAO**: `ConexionDB` + `PartidoDATA`/`EquipoDATA`/`JugadorDATA`/`EstadioDATA`.
@@ -183,11 +169,9 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta
 
 ## 7. Qué falta construir (resumen accionable)
 
-**Las 6 tareas del plan están completas** y verificadas. El simulador se usa de punta a punta desde el menú de consola (`Main` → `ControladorPartido`). Solo quedan ítems **opcionales**, ninguno exigido por la consigna:
-
-1. **B4 — amistoso vs torneo con comportamiento.** Hoy `modoJuego` se elige y se guarda, pero no cambia la lógica. Un "torneo" real implicaría fixture/tabla/llaves.
-2. **B6 — Sincronizar el README.** Nombra `ConstructorPartido`/`IObservador`; el código usa `PartidoBuilder`/`IObservadorPartido`.
-3. **B9 — Default `FALTA` en `determinarEvento()`.** Revisar si el fallback sesga el conteo de eventos.
+**Todas las funcionalidades requeridas están completas.** No quedan ítems pendientes de la consigna. Extensiones opcionales fuera de alcance:
+- Fixture / tabla de posiciones de un torneo real (múltiples partidos).
+- Modo multijugador o IA autónoma por jugador.
 
 ---
 
@@ -214,8 +198,12 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta
 | 7 | GUI funcional completa (Gestión, Configurar Partido, Simulación, Historial) | ✅ Hecho y verificado — todas las pantallas con lógica real a través de la fachada |
 | 8 | Roles de jugador como `ComboBox` (Delantero/Mediocampista/Defensor/Arquero) + simulación ponderada por rol | ✅ Hecho y verificado (compila; GOL→Delanteros ponderados, FALTA→Defensores ponderados) |
 | 9 | Auto-asignación de estadio al elegir equipo local en Configurar Partido | ✅ Hecho y verificado (listener en `cbLocal`; vínculo equipo→estadio persiste en `equipos.estadio_nombre`) |
+| 10 | Resultado de penal en relato (PENAL_CONVERTIDO / PENAL_FALLADO) | ✅ Hecho — motor genera dos eventos por penal; `Marcador` cuenta solo `PENAL_CONVERTIDO`; relato y GUI muestran ambos |
+| 11 | Botón Pausar/Reanudar durante la simulación en tiempo real | ✅ Hecho — `togglePausa()` en `ControladorSimulacion`; la botonera muestra "Pausar"/"Reanudar" según estado |
+| 12 | Tanda de penales en modo Torneo con empate | ✅ Hecho — `EstadoPenales` + `MotorSimulacion.simularTandaPenales()` + columna `penales` en BD; flujo: `avanzarTramo()` redirige si empate en torneo |
+| 13 | Eliminar selector de táctica de Gestión de Equipos; prefijo modo en historial | ✅ Hecho — `cbTactica`/`btnCambiarTactica` eliminados de `ControladorGestionEquipos`; historial muestra `[modoJuego]` |
 
-> **Plan completo.** Las 9 tareas están terminadas. Lo único restante son los ítems opcionales de la sección 7.
+> **Plan completo.** Las 13 tareas están terminadas.
 
 ---
 
