@@ -129,37 +129,88 @@ ControladorPartido {
     // la UI no tiene acceso a ese stream). Se reconstruye desde los eventos ya registrados
     // del partido, sin tocar el builder ni el observador (Regla 2). Si no hay partido,
     // devuelve una lista vacia.
+    //
+    // El relato se entrega ORDENADO por minuto ascendente (el motor genera los eventos de
+    // cada tramo en minutos aleatorios, asi que el orden de registro no es cronologico) y
+    // con SEPARADORES de tramo (Primer Tiempo / Entretiempo / Segundo Tiempo) intercalados.
+    // Criterio de tramo: minuto <= 45 pertenece al primer tiempo; > 45 al segundo.
     public List<String> obtenerRelato() {
         List<String> lineas = new ArrayList<>();
         if (partido == null) {
             return lineas;
         }
-        List<EventoDeportivo> eventos = partido.getEventos();
+        List<EventoDeportivo> eventos = ordenarPorMinuto(partido.getEventos());
+
+        boolean headerPrimer = false;
+        boolean headerEntre = false;
+        boolean headerSegundo = false;
         for (int i = 0; i < eventos.size(); i++) {
-            lineas.add(formatearRelato(eventos.get(i)));
+            EventoDeportivo evento = eventos.get(i);
+            if (evento.getMinuto() <= 45) {
+                if (!headerPrimer) {
+                    lineas.add("───── Primer Tiempo ─────");
+                    headerPrimer = true;
+                }
+            } else {
+                if (!headerEntre) {
+                    lineas.add("───── Entretiempo ─────");
+                    headerEntre = true;
+                }
+                if (!headerSegundo) {
+                    lineas.add("───── Segundo Tiempo ─────");
+                    headerSegundo = true;
+                }
+            }
+            lineas.add(formatearRelato(evento));
+        }
+
+        // Si el partido ya dejo atras el primer tiempo pero aun no hay eventos del segundo
+        // (estamos parados en el entretiempo), mostramos igual el separador de entretiempo
+        // al pie para que la division de tramos quede visible.
+        if (!headerEntre && partido.getEstadoActual() != null
+                && !partido.getEstadoActual().getNombre().equals("Primer Tiempo")) {
+            lineas.add("───── Entretiempo ─────");
         }
         return lineas;
     }
 
+    // Helper privado: devuelve una copia de los eventos ordenada por minuto ascendente.
+    // Orden por insercion (sin Streams, segun convencion del proyecto); la lista es chica.
+    // No modifica la lista original del partido.
+    private List<EventoDeportivo> ordenarPorMinuto(List<EventoDeportivo> original) {
+        List<EventoDeportivo> copia = new ArrayList<>(original);
+        for (int i = 1; i < copia.size(); i++) {
+            EventoDeportivo actual = copia.get(i);
+            int j = i - 1;
+            while (j >= 0 && copia.get(j).getMinuto() > actual.getMinuto()) {
+                copia.set(j + 1, copia.get(j));
+                j--;
+            }
+            copia.set(j + 1, actual);
+        }
+        return copia;
+    }
+
     // Helper privado: arma la linea de relato de un evento. Replica el formato textual
     // que usa RelatoDeportivo para la consola, adaptando el dato del modelo a la GUI.
+    // El minuto se muestra con el simbolo de minutos (ej: "26´  GOL de ...").
     private String formatearRelato(EventoDeportivo evento) {
         String jugador = evento.getJugador().getNombre();
         String equipo = evento.getEquipo().getNombre();
-        int min = evento.getMinuto();
+        String min = evento.getMinuto() + "´  ";
         TipoEvento tipo = evento.getTipo();
         if (tipo == TipoEvento.GOL) {
-            return "Min " + min + " - GOL de " + jugador + " (" + equipo + ")";
+            return min + "GOL de " + jugador + " (" + equipo + ")";
         } else if (tipo == TipoEvento.FALTA) {
-            return "Min " + min + " - Falta cometida por " + jugador;
+            return min + "Falta cometida por " + jugador;
         } else if (tipo == TipoEvento.TARJETA_AMARILLA) {
-            return "Min " + min + " - Tarjeta AMARILLA para " + jugador;
+            return min + "Tarjeta AMARILLA para " + jugador;
         } else if (tipo == TipoEvento.TARJETA_ROJA) {
-            return "Min " + min + " - Tarjeta ROJA para " + jugador + ". Se va expulsado.";
+            return min + "Tarjeta ROJA para " + jugador + ". Se va expulsado.";
         } else if (tipo == TipoEvento.LESION) {
-            return "Min " + min + " - " + jugador + " sale lesionado del campo.";
+            return min + jugador + " sale lesionado del campo.";
         } else { // PENAL
-            return "Min " + min + " - PENAL a favor de " + equipo + ". Ejecuta " + jugador;
+            return min + "PENAL a favor de " + equipo + ". Ejecuta " + jugador;
         }
     }
 
@@ -225,7 +276,11 @@ ControladorPartido {
         int numero = equipo.getJugadores().size() + 1;
         Jugador jugador = new Jugador(nombreJugador, posicion, numero);
         equipo.agregarJugador(jugador);
-        registrarJugador(jugador);
+        // Persistimos el EQUIPO completo (no solo el jugador): EquipoDATA.guardar graba la
+        // plantilla fijando equipo_nombre, que es la asociacion durable. Si solo guardaramos
+        // el jugador (JugadorDATA deja equipo_nombre en NULL), al reabrir la app el equipo
+        // cargaria sin jugadores. Reutiliza el helper ya existente.
+        persistirEquipoConJugadores(equipo);
     }
 
     // Aplica una tactica inicial (antes del partido) a un equipo, mapeando el nombre
@@ -236,6 +291,18 @@ ControladorPartido {
         ITactica tactica = crearTactica(nombreTactica);
         if (tactica != null) {
             equipo.cambiarTactica(tactica);
+        }
+    }
+
+    // Cambia la tactica "de base" de un equipo desde la gestion (no es por-partido) y la
+    // PERSISTE. A diferencia de configurarTacticaInicial (que solo aplica en memoria para un
+    // partido puntual), aca ademas se guarda el equipo para que el cambio sobreviva al cierre.
+    // La UI no instancia tacticas (Regla 1): recibe el nombre y aca se mapea con crearTactica.
+    public void cambiarTacticaEquipo(Equipo equipo, String nombreTactica) {
+        ITactica nueva = crearTactica(nombreTactica);
+        if (nueva != null) {
+            equipo.cambiarTactica(nueva);
+            new EquipoDATA().guardar(equipo); // persiste la tactica (y la plantilla)
         }
     }
 

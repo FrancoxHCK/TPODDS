@@ -27,7 +27,7 @@ public class ControladorMenuPrincipal {
 
         Button botonGestion = new Button("Gestion de Equipos");
         Button botonConfigurar = new Button("Configurar Partido");
-        Button botonSimulacion = new Button("Simulacion");
+        Button botonSimulacion = new Button("Ultimo Partido");
         Button botonHistorial = new Button("Historial");
         Button botonSalir = new Button("Salir");
 

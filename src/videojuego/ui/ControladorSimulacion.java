@@ -54,11 +54,29 @@ public class ControladorSimulacion {
             return raizVacia;
         }
 
+        // Pantalla PREVIA: el partido recien se configuro (sigue en Primer Tiempo y sin
+        // eventos). Mostramos solo la informacion del partido y un boton grande central
+        // "Empezar partido" que dispara el primer tiempo. Sin caja de relato todavia.
+        if (partido.getEstadoActual().getNombre().equals("Primer Tiempo")
+                && partido.getEventos().isEmpty()) {
+            return getVistaPrevia(partido, titulo, botonVolver);
+        }
+
         // Cabecera fija con los datos del partido.
         Label cabecera = new Label(partido.getEquipoLocal().getNombre()
                 + " vs " + partido.getEquipoVisitante().getNombre()
                 + "  |  Estadio: " + partido.getEstadio().getNombre()
                 + "  |  Modo: " + partido.getModoJuego());
+
+        // Aviso: si un equipo no tiene jugadores, el motor no puede generar eventos para el,
+        // y el partido puede terminar 0-0 sin relato. Lo avisamos para que no confunda.
+        Label lblAvisoPlantilla = new Label();
+        if (partido.getEquipoLocal().getJugadores().isEmpty()
+                || partido.getEquipoVisitante().getJugadores().isEmpty()) {
+            lblAvisoPlantilla.setText("Atencion: algun equipo no tiene jugadores cargados; "
+                    + "el partido puede no generar eventos. Carga la plantilla en 'Gestion de Equipos'.");
+            lblAvisoPlantilla.setStyle("-fx-text-fill: #b00020;");
+        }
 
         lblFase = new Label();
         lblFase.setStyle("-fx-font-weight: bold;");
@@ -76,9 +94,47 @@ public class ControladorSimulacion {
         // Pintamos el estado inicial (el partido ya arranca en Primer Tiempo).
         refrescar();
 
-        VBox raiz = new VBox(12, titulo, cabecera, lblFase, lblMarcador, lblEstadisticas,
-                tituloRelato, listaRelato, panelAcciones, lblMensaje, botonVolver);
+        VBox raiz = new VBox(12, titulo, cabecera, lblAvisoPlantilla, lblFase, lblMarcador,
+                lblEstadisticas, tituloRelato, listaRelato, panelAcciones, lblMensaje, botonVolver);
         raiz.setPadding(new Insets(25));
+        return raiz;
+    }
+
+    // Pantalla previa al inicio del partido: muestra la informacion del partido y un boton
+    // grande central para arrancar. Al presionar "Empezar partido" se simula el primer tiempo
+    // y se reentra a la pantalla de Simulacion, que ya muestra el relato y el entretiempo.
+    private Parent getVistaPrevia(Partido partido, Label titulo, Button botonVolver) {
+        Equipo local = partido.getEquipoLocal();
+        Equipo visitante = partido.getEquipoVisitante();
+
+        Label enfrentamiento = new Label(local.getNombre() + "  vs  " + visitante.getNombre());
+        enfrentamiento.setStyle("-fx-font-size: 26px; -fx-font-weight: bold;");
+
+        Label datos = new Label("Estadio: " + partido.getEstadio().getNombre()
+                + "      Modo: " + partido.getModoJuego());
+        Label tacticas = new Label("Tactica " + local.getNombre() + ": " + local.getTactica().getNombre()
+                + "     |     Tactica " + visitante.getNombre() + ": " + visitante.getTactica().getNombre());
+
+        // Mismo aviso de plantilla vacia que la vista de simulacion.
+        Label lblAvisoPlantilla = new Label();
+        if (local.getJugadores().isEmpty() || visitante.getJugadores().isEmpty()) {
+            lblAvisoPlantilla.setText("Atencion: algun equipo no tiene jugadores cargados; "
+                    + "el partido puede no generar eventos. Carga la plantilla en 'Gestion de Equipos'.");
+            lblAvisoPlantilla.setStyle("-fx-text-fill: #b00020;");
+        }
+
+        Button btnEmpezar = new Button("Empezar partido");
+        btnEmpezar.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-padding: 18 50 18 50;");
+        btnEmpezar.setOnAction(e -> {
+            fachada.simularTramo(); // arranca y simula el primer tiempo (queda en Entretiempo)
+            // Reentra a la pantalla: ya con eventos, getVista() arma la vista completa con relato.
+            navegador.navegarA(Navegador.Pantalla.SIMULACION);
+        });
+
+        VBox raiz = new VBox(25, titulo, enfrentamiento, datos, tacticas, lblAvisoPlantilla,
+                btnEmpezar, botonVolver);
+        raiz.setAlignment(Pos.CENTER);
+        raiz.setPadding(new Insets(40));
         return raiz;
     }
 
