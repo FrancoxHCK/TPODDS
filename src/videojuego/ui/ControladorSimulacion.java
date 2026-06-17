@@ -1,5 +1,8 @@
 package videojuego.ui;
 
+import javafx.animation.Animation;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Parent;
@@ -9,26 +12,43 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.util.Duration;
 import videojuego.fachada.ControladorPartido;
 import videojuego.modelo.Equipo;
 import videojuego.modelo.Partido;
 
-// Pantalla de simulacion del partido. Replica graficamente el flujo de Main.jugarPartido()
-// + menuEntretiempo(): se juega por tramos (1er tiempo -> entretiempo interactivo con cambio
-// de tactica -> 2do tiempo) mostrando marcador, relato y estadisticas en vivo. Toda la logica
-// pasa por la fachada ControladorPartido (el partido ya viene configurado desde la pantalla b).
+// Pantalla de simulacion del partido EN TIEMPO REAL. Un reloj (Timeline de JavaFX) avanza
+// minuto a minuto: en cada minuto la fachada decide, con baja probabilidad, si ocurre un
+// acontecimiento, y el relato/marcador se refrescan al instante. Las tacticas se pueden
+// cambiar durante TODO el partido (no solo en el entretiempo): el motor lee la tactica
+// vigente al generar cada evento, asi que el cambio impacta en los minutos siguientes.
+//
+// Tramos (maquina de estados del Partido): Primer Tiempo (min 1-45) -> Entretiempo (pausa,
+// el usuario continua cuando quiere) -> Segundo Tiempo (min 46-90) -> Finalizado (se guarda
+// en el historial). Toda la logica pasa por la fachada ControladorPartido.
 public class ControladorSimulacion {
+
+    // Milisegundos de reloj por cada minuto de partido. 200ms -> un tramo de 45' dura ~9s.
+    private static final double MS_POR_MINUTO = 200;
+    private static final int MINUTOS_PRIMER_TIEMPO = 45;
+    private static final int MINUTOS_PARTIDO = 90;
 
     private final Navegador navegador;
     private final ControladorPartido fachada;
 
-    // Nodos que se refrescan tras cada tramo (se guardan como campos para actualizarlos).
+    private Timeline reloj;     // motor del tiempo real; null hasta que se empieza el partido
+    private int minutoActual;   // minuto de juego en curso (0 = aun no arranco)
+
+    // Nodos que se refrescan en cada minuto (se guardan como campos para actualizarlos).
+    private Label lblReloj;
     private Label lblFase;
     private Label lblMarcador;
     private Label lblEstadisticas;
     private ListView<String> listaRelato;
-    private VBox panelAcciones; // contenedor de los controles que cambian segun la fase
-    private Label lblMensaje;   // avisos puntuales (ej: tactica cambiada)
+    private ComboBox<String> comboLocal;
+    private ComboBox<String> comboVisitante;
+    private VBox panelControl; // boton que cambia segun la fase (empezar / continuar / fin)
+    private Label lblMensaje;  // avisos puntuales (ej: tactica cambiada)
 
     public ControladorSimulacion(Navegador navegador, ControladorPartido fachada) {
         this.navegador = navegador;
@@ -41,7 +61,10 @@ public class ControladorSimulacion {
         titulo.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
 
         Button botonVolver = new Button("Volver al menu");
-        botonVolver.setOnAction(e -> navegador.navegarA(Navegador.Pantalla.MENU));
+        botonVolver.setOnAction(e -> {
+            detenerReloj(); // si el partido seguia corriendo, frenamos el tiempo real
+            navegador.navegarA(Navegador.Pantalla.MENU);
+        });
 
         // Guarda: la pantalla es alcanzable directo desde el menu. Si no hay partido
         // configurado, no hay nada que simular: avisamos y ofrecemos volver.
@@ -52,14 +75,6 @@ public class ControladorSimulacion {
             raizVacia.setAlignment(Pos.CENTER);
             raizVacia.setPadding(new Insets(40));
             return raizVacia;
-        }
-
-        // Pantalla PREVIA: el partido recien se configuro (sigue en Primer Tiempo y sin
-        // eventos). Mostramos solo la informacion del partido y un boton grande central
-        // "Empezar partido" que dispara el primer tiempo. Sin caja de relato todavia.
-        if (partido.getEstadoActual().getNombre().equals("Primer Tiempo")
-                && partido.getEventos().isEmpty()) {
-            return getVistaPrevia(partido, titulo, botonVolver);
         }
 
         // Cabecera fija con los datos del partido.
@@ -78,6 +93,8 @@ public class ControladorSimulacion {
             lblAvisoPlantilla.setStyle("-fx-text-fill: #b00020;");
         }
 
+        lblReloj = new Label();
+        lblReloj.setStyle("-fx-font-size: 26px; -fx-font-weight: bold;");
         lblFase = new Label();
         lblFase.setStyle("-fx-font-weight: bold;");
         lblMarcador = new Label();
@@ -88,60 +105,89 @@ public class ControladorSimulacion {
         listaRelato = new ListView<>();
         listaRelato.setPrefHeight(220);
 
-        panelAcciones = new VBox(10);
+        // Panel de tacticas SIEMPRE visible: se pueden cambiar durante todo el partido.
+        Label subTacticas = new Label("Tacticas (se pueden cambiar en cualquier momento):");
+        subTacticas.setStyle("-fx-font-weight: bold;");
+        comboLocal = new ComboBox<>();
+        comboVisitante = new ComboBox<>();
+        HBox filaLocal = armarFilaTactica("Local (" + partido.getEquipoLocal().getNombre() + "):",
+                partido.getEquipoLocal(), comboLocal);
+        HBox filaVisitante = armarFilaTactica("Visitante (" + partido.getEquipoVisitante().getNombre() + "):",
+                partido.getEquipoVisitante(), comboVisitante);
+
+        panelControl = new VBox(10);
         lblMensaje = new Label();
 
-        // Pintamos el estado inicial (el partido ya arranca en Primer Tiempo).
+        // Minuto inicial segun el tramo (flujo normal: se entra recien configurado).
+        this.minutoActual = partido.getEstadoActual().getNombre().equals("Primer Tiempo")
+                ? 0 : MINUTOS_PRIMER_TIEMPO;
+
         refrescar();
 
-        VBox raiz = new VBox(12, titulo, cabecera, lblAvisoPlantilla, lblFase, lblMarcador,
-                lblEstadisticas, tituloRelato, listaRelato, panelAcciones, lblMensaje, botonVolver);
+        VBox raiz = new VBox(12, titulo, cabecera, lblAvisoPlantilla, lblReloj, lblFase,
+                lblMarcador, lblEstadisticas, tituloRelato, listaRelato,
+                subTacticas, filaLocal, filaVisitante, panelControl, lblMensaje, botonVolver);
         raiz.setPadding(new Insets(25));
         return raiz;
     }
 
-    // Pantalla previa al inicio del partido: muestra la informacion del partido y un boton
-    // grande central para arrancar. Al presionar "Empezar partido" se simula el primer tiempo
-    // y se reentra a la pantalla de Simulacion, que ya muestra el relato y el entretiempo.
-    private Parent getVistaPrevia(Partido partido, Label titulo, Button botonVolver) {
-        Equipo local = partido.getEquipoLocal();
-        Equipo visitante = partido.getEquipoVisitante();
+    // ===================== RELOJ EN TIEMPO REAL =====================
 
-        Label enfrentamiento = new Label(local.getNombre() + "  vs  " + visitante.getNombre());
-        enfrentamiento.setStyle("-fx-font-size: 26px; -fx-font-weight: bold;");
-
-        Label datos = new Label("Estadio: " + partido.getEstadio().getNombre()
-                + "      Modo: " + partido.getModoJuego());
-        Label tacticas = new Label("Tactica " + local.getNombre() + ": " + local.getTactica().getNombre()
-                + "     |     Tactica " + visitante.getNombre() + ": " + visitante.getTactica().getNombre());
-
-        // Mismo aviso de plantilla vacia que la vista de simulacion.
-        Label lblAvisoPlantilla = new Label();
-        if (local.getJugadores().isEmpty() || visitante.getJugadores().isEmpty()) {
-            lblAvisoPlantilla.setText("Atencion: algun equipo no tiene jugadores cargados; "
-                    + "el partido puede no generar eventos. Carga la plantilla en 'Gestion de Equipos'.");
-            lblAvisoPlantilla.setStyle("-fx-text-fill: #b00020;");
-        }
-
-        Button btnEmpezar = new Button("Empezar partido");
-        btnEmpezar.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-padding: 18 50 18 50;");
-        btnEmpezar.setOnAction(e -> {
-            fachada.simularTramo(); // arranca y simula el primer tiempo (queda en Entretiempo)
-            // Reentra a la pantalla: ya con eventos, getVista() arma la vista completa con relato.
-            navegador.navegarA(Navegador.Pantalla.SIMULACION);
-        });
-
-        VBox raiz = new VBox(25, titulo, enfrentamiento, datos, tacticas, lblAvisoPlantilla,
-                btnEmpezar, botonVolver);
-        raiz.setAlignment(Pos.CENTER);
-        raiz.setPadding(new Insets(40));
-        return raiz;
+    // Crea y arranca el reloj: dispara tick() una vez por cada minuto de partido.
+    private void iniciarReloj() {
+        reloj = new Timeline(new KeyFrame(Duration.millis(MS_POR_MINUTO), e -> tick()));
+        reloj.setCycleCount(Animation.INDEFINITE);
+        reloj.play();
+        refrescar();
     }
 
-    // Refresca marcador, relato, estadisticas y la botonera segun la fase actual del partido.
+    // Un minuto de juego: avanza el reloj, pide a la fachada simular ese minuto y, al llegar
+    // al final de un tramo, avanza la maquina de estados (pausando o frenando el reloj).
+    private void tick() {
+        String fase = fachada.getPartido().getEstadoActual().getNombre();
+
+        if (fase.equals("Primer Tiempo")) {
+            minutoActual++;
+            fachada.simularMinuto(minutoActual);
+            if (minutoActual >= MINUTOS_PRIMER_TIEMPO) {
+                reloj.pause();
+                fachada.avanzarTramo(); // Primer Tiempo -> Entretiempo (el usuario continua)
+            }
+        } else if (fase.equals("Segundo Tiempo")) {
+            minutoActual++;
+            fachada.simularMinuto(minutoActual);
+            if (minutoActual >= MINUTOS_PARTIDO) {
+                reloj.stop();
+                fachada.avanzarTramo(); // Segundo Tiempo -> Finalizado (se guarda solo)
+            }
+        }
+        refrescar();
+    }
+
+    // Reanuda el reloj para el segundo tiempo tras el entretiempo.
+    private void continuarSegundoTiempo() {
+        fachada.avanzarTramo(); // Entretiempo -> Segundo Tiempo
+        if (reloj != null) {
+            reloj.play();
+        }
+        refrescar();
+    }
+
+    private void detenerReloj() {
+        if (reloj != null) {
+            reloj.stop();
+            reloj = null;
+        }
+    }
+
+    // ===================== REFRESCO DE LA VISTA =====================
+
+    // Refresca reloj, fase, marcador, estadisticas, relato, combos y la botonera de control.
     private void refrescar() {
         Partido partido = fachada.getPartido();
         String fase = partido.getEstadoActual().getNombre();
+
+        lblReloj.setText("Minuto " + Math.min(minutoActual, MINUTOS_PARTIDO) + "'");
         lblFase.setText("Fase actual: " + fase);
 
         if (fachada.getMarcador() != null) {
@@ -151,57 +197,41 @@ public class ControladorSimulacion {
             lblEstadisticas.setText(fachada.getEstadisticas().getResumen());
         }
         listaRelato.getItems().setAll(fachada.obtenerRelato());
+        if (!listaRelato.getItems().isEmpty()) {
+            listaRelato.scrollTo(listaRelato.getItems().size() - 1); // autoscroll al ultimo
+        }
 
-        // Reconstruimos los controles de accion segun la fase.
-        panelAcciones.getChildren().clear();
-        lblMensaje.setText("");
-        if (fase.equals("Primer Tiempo")) {
-            armarPanelPrimerTiempo();
+        // Las tacticas se pueden cambiar mientras el partido no este finalizado.
+        boolean finalizado = fase.equals("Finalizado");
+        comboLocal.setDisable(finalizado);
+        comboVisitante.setDisable(finalizado);
+
+        // Botonera de control segun la fase / si el reloj ya arranco.
+        panelControl.getChildren().clear();
+        if (fase.equals("Primer Tiempo") && reloj == null) {
+            Button btnEmpezar = new Button("Empezar partido");
+            btnEmpezar.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-padding: 12 30 12 30;");
+            btnEmpezar.setOnAction(e -> iniciarReloj());
+            panelControl.getChildren().add(btnEmpezar);
         } else if (fase.equals("Entretiempo")) {
-            armarPanelEntretiempo(partido);
-        } else if (fase.equals("Segundo Tiempo")) {
-            armarPanelSegundoTiempo();
-        } else { // Finalizado
-            armarPanelFinalizado();
+            Label sub = new Label("=== ENTRETIEMPO === (puede ajustar tacticas antes de seguir)");
+            sub.setStyle("-fx-font-weight: bold;");
+            Button btnContinuar = new Button("Continuar al segundo tiempo");
+            btnContinuar.setOnAction(e -> continuarSegundoTiempo());
+            panelControl.getChildren().addAll(sub, btnContinuar);
+        } else if (fase.equals("Finalizado")) {
+            Label fin = new Label("Partido finalizado. Resultado guardado en el historial.");
+            fin.setStyle("-fx-font-weight: bold;");
+            panelControl.getChildren().add(fin);
+        } else { // Primer/Segundo Tiempo con el reloj corriendo
+            Label enCurso = new Label("Partido en curso...");
+            panelControl.getChildren().add(enCurso);
         }
     }
 
-    // Fase 1er tiempo: un boton que simula el tramo y avanza al entretiempo.
-    private void armarPanelPrimerTiempo() {
-        Button btnSimular = new Button("Simular primer tiempo");
-        btnSimular.setOnAction(e -> {
-            fachada.simularTramo(); // simula el 1er tiempo y deja el partido en Entretiempo
-            refrescar();
-        });
-        panelAcciones.getChildren().add(btnSimular);
-    }
-
-    // Fase entretiempo: cambio de tactica de cada equipo (opcional) y boton para continuar.
-    private void armarPanelEntretiempo(Partido partido) {
-        Equipo local = partido.getEquipoLocal();
-        Equipo visitante = partido.getEquipoVisitante();
-
-        Label sub = new Label("=== ENTRETIEMPO === (puede cambiar tacticas antes del segundo tiempo)");
-        sub.setStyle("-fx-font-weight: bold;");
-
-        HBox filaLocal = armarFilaTactica("Tactica " + local.getNombre() + ":", local);
-        HBox filaVisitante = armarFilaTactica("Tactica " + visitante.getNombre() + ":", visitante);
-
-        Button btnContinuar = new Button("Continuar al segundo tiempo");
-        btnContinuar.setOnAction(e -> {
-            // La maquina de estados exige pasar por el entretiempo: la primera llamada lo
-            // deja atras (sin simular), la segunda simula el 2do tiempo, finaliza y guarda solo.
-            fachada.simularTramo(); // entretiempo -> segundo tiempo
-            fachada.simularTramo(); // segundo tiempo -> finalizado (se guarda en el historial)
-            refrescar();
-        });
-
-        panelAcciones.getChildren().addAll(sub, filaLocal, filaVisitante, btnContinuar);
-    }
-
     // Arma una fila: etiqueta + combo de tacticas + boton "Aplicar" para un equipo.
-    private HBox armarFilaTactica(String etiqueta, Equipo equipo) {
-        ComboBox<String> combo = new ComboBox<>();
+    // El combo recibido se guarda como campo para poder habilitarlo/deshabilitarlo.
+    private HBox armarFilaTactica(String etiqueta, Equipo equipo, ComboBox<String> combo) {
         combo.getItems().setAll("Ofensiva", "Defensiva", "Equilibrada");
         combo.setValue(equipo.getTactica().getNombre()); // muestra la tactica actual
 
@@ -211,30 +241,13 @@ public class ControladorSimulacion {
             if (elegida != null) {
                 // Pasa por la fachada: mapea el nombre y aplica con la guarda de finalizado.
                 fachada.cambiarTacticaEnVivo(equipo, elegida);
-                lblMensaje.setText("Tactica de " + equipo.getNombre() + " cambiada a " + elegida + ".");
+                lblMensaje.setText("Minuto " + Math.min(minutoActual, MINUTOS_PARTIDO)
+                        + "': tactica de " + equipo.getNombre() + " cambiada a " + elegida + ".");
             }
         });
 
         HBox fila = new HBox(10, new Label(etiqueta), combo, btnAplicar);
         fila.setAlignment(Pos.CENTER_LEFT);
         return fila;
-    }
-
-    // Fase 2do tiempo (camino alternativo): boton para simularlo y finalizar. Normalmente no
-    // se ve, porque "Continuar al segundo tiempo" encadena los dos tramos en un solo paso.
-    private void armarPanelSegundoTiempo() {
-        Button btnSimular = new Button("Simular segundo tiempo");
-        btnSimular.setOnAction(e -> {
-            fachada.simularTramo(); // segundo tiempo -> finalizado (se guarda en el historial)
-            refrescar();
-        });
-        panelAcciones.getChildren().add(btnSimular);
-    }
-
-    // Fase finalizado: sin acciones; el partido ya quedo guardado en el historial.
-    private void armarPanelFinalizado() {
-        Label fin = new Label("Partido finalizado. Resultado guardado en el historial.");
-        fin.setStyle("-fx-font-weight: bold;");
-        panelAcciones.getChildren().add(fin);
     }
 }

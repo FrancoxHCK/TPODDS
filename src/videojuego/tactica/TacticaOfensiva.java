@@ -8,7 +8,7 @@ public class TacticaOfensiva implements ITactica {
     public double getProbabilidadFalta() { return 0.30; }
 
     @Override
-    public double getProbabilidadLesion() { return 0.20; }
+    public double getProbabilidadLesion() { return 0.06; }
 
     @Override
     public String getNombre() { return "Ofensiva"; }

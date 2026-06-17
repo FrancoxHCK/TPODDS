@@ -81,6 +81,29 @@ ControladorPartido {
         }
     }
 
+    // Simula un unico minuto del partido (modo en tiempo real de la GUI). Solo genera eventos
+    // si el tramo actual lo permite (Primer/Segundo Tiempo); en otros estados es no-op. No
+    // avanza el estado: el avance entre tramos lo controla la UI con avanzarTramo() segun el
+    // reloj. Devolver eventos no es necesario: la UI relee el relato desde el partido.
+    public void simularMinuto(int minuto) {
+        if (partido != null && partido.getEstadoActual().permiteSimular()) {
+            motor.simularMinuto(partido, minuto);
+        }
+    }
+
+    // Avanza el partido al siguiente tramo SIN simular eventos en bloque (a diferencia de
+    // simularTramo). Lo usa el modo en tiempo real: cuando el reloj llega al final de un tramo,
+    // la UI pide pasar al siguiente estado. Si el partido queda finalizado, se persiste.
+    public void avanzarTramo() {
+        if (partido == null) {
+            return;
+        }
+        partido.avanzarEstado();
+        if (partido.getEstadoActual().getNombre().equals("Finalizado")) {
+            new PartidoDATA().guardar(partido);
+        }
+    }
+
     // Variante por nombre del cambio de tactica en tiempo real, pensada para la UI:
     // mapea el nombre a la tactica concreta (la UI no instancia tacticas, Regla 1) y
     // delega en cambiarTactica(Equipo, ITactica), que conserva la guarda de finalizado.

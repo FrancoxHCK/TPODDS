@@ -8,7 +8,7 @@ public class TacticaEquilibrada implements ITactica {
     public double getProbabilidadFalta() { return 0.30; }
 
     @Override
-    public double getProbabilidadLesion() { return 0.15; }
+    public double getProbabilidadLesion() { return 0.04; }
 
     @Override
     public String getNombre() { return "Equilibrada"; }
