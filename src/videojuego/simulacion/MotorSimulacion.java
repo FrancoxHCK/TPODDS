@@ -1,9 +1,9 @@
 package videojuego.simulacion;
 
 import videojuego.modelo.*;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.stream.Collectors;
 
 public class MotorSimulacion {
 
@@ -31,7 +31,7 @@ public class MotorSimulacion {
                                        tipo == TipoEvento.TARJETA_AMARILLA ||
                                        tipo == TipoEvento.TARJETA_ROJA)
                                         ? defensor : atacante;
-            Jugador jugador = obtenerJugadorDisponible(equipoDelJugador);
+            Jugador jugador = obtenerJugadorDisponible(equipoDelJugador, tipo);
             if (jugador == null) continue; // Si no hay jugadores disponibles, salta el evento
 
             partido.registrarEvento(new EventoDeportivo(tipo, jugador, equipoDelJugador, minuto));
@@ -55,12 +55,48 @@ public class MotorSimulacion {
         return TipoEvento.FALTA; // Evento por defecto si no se cumple ninguna condición
     }
 
-    private Jugador obtenerJugadorDisponible(Equipo equipo) {
-        List<Jugador> disponibles = equipo.getJugadores().stream()
-                .filter(j -> j.getEstado() == EstadoJugador.DISPONIBLE)
-                .collect(Collectors.toList());
-
+    // Selecciona un jugador disponible con peso segun su posicion y el tipo de evento.
+    // Delantero: mas chance de GOL/PENAL; Defensor: mas chance de FALTA/tarjetas;
+    // Mediocampista: intermedio; Arquero: chances minimas en ambas categorias.
+    private Jugador obtenerJugadorDisponible(Equipo equipo, TipoEvento tipo) {
+        List<Jugador> disponibles = new ArrayList<>();
+        for (Jugador j : equipo.getJugadores()) {
+            if (j.getEstado() == EstadoJugador.DISPONIBLE) {
+                disponibles.add(j);
+            }
+        }
         if (disponibles.isEmpty()) return null;
-        return disponibles.get(random.nextInt(disponibles.size()));
+
+        double[] pesos = new double[disponibles.size()];
+        double totalPeso = 0;
+        for (int i = 0; i < disponibles.size(); i++) {
+            pesos[i] = getPesoJugador(disponibles.get(i).getPosicion(), tipo);
+            totalPeso += pesos[i];
+        }
+
+        double r = random.nextDouble() * totalPeso;
+        double acumulado = 0;
+        for (int i = 0; i < disponibles.size(); i++) {
+            acumulado += pesos[i];
+            if (r < acumulado) return disponibles.get(i);
+        }
+        return disponibles.get(disponibles.size() - 1);
+    }
+
+    private double getPesoJugador(String posicion, TipoEvento tipo) {
+        if (tipo == TipoEvento.GOL || tipo == TipoEvento.PENAL) {
+            if ("Delantero".equals(posicion))     return 4.0;
+            if ("Mediocampista".equals(posicion)) return 2.0;
+            if ("Defensor".equals(posicion))      return 0.5;
+            if ("Arquero".equals(posicion))       return 0.05;
+        } else if (tipo == TipoEvento.FALTA ||
+                   tipo == TipoEvento.TARJETA_AMARILLA ||
+                   tipo == TipoEvento.TARJETA_ROJA) {
+            if ("Delantero".equals(posicion))     return 0.5;
+            if ("Mediocampista".equals(posicion)) return 1.5;
+            if ("Defensor".equals(posicion))      return 4.0;
+            if ("Arquero".equals(posicion))       return 0.2;
+        }
+        return 1.0; // LESION y posiciones no reconocidas: peso uniforme
     }
 }

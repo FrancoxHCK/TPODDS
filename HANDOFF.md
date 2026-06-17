@@ -2,7 +2,7 @@
 
 Documento para retomar el proyecto en otra sesión. Describe el **estado real del código** (no el deseado), los patrones aplicados, y el **gap entre lo implementado y el alcance definido**. Java 21. **Persistencia: SQLite vía JDBC** (única dependencia externa: el driver `sqlite-jdbc` en `lib/`).
 
-> **Última actualización:** se migró la **capa de persistencia de listas en memoria a SQLite/JDBC** (ver sección 10). `ConexionDB` ahora abre/posee una `Connection` a `simulador.db` y crea el esquema; los 4 DAOs reescribieron sus cuerpos con `PreparedStatement`. **La regla de oro se cumplió: nada fuera del paquete `persistencia` cambió** (modelo, fachada, observadores, `Main` intactos). Verificado end-to-end con **dos corridas separadas** (jugar+guardar; reiniciar JVM y leer todo desde la BD). Antes de esto, las 6 tareas del plan y el menú interactivo ya estaban completos.
+> **Última actualización:** mejoras en la GUI. (1) El campo de posición de jugador en Gestión de Equipos es ahora un `ComboBox` con 4 roles fijos: **Delantero, Mediocampista, Defensor, Arquero**. (2) En Configurar Partido, al elegir el equipo local el estadio **se auto-asigna automáticamente** al estadio vinculado a ese equipo. (3) El `MotorSimulacion` ahora usa **selección ponderada por rol**: los goles/penales prefieren Delanteros, las faltas/tarjetas prefieren Defensores, con pesos diferenciados para cada posición. El vínculo equipo→estadio se persiste en `equipos.estadio_nombre` al registrar. Antes de esto: migración de persistencia a SQLite/JDBC completada y verificada end-to-end.
 
 ---
 
@@ -34,7 +34,7 @@ Documento para retomar el proyecto en otra sesión. Describe el **estado real de
 ## 1.b Interfaz gráfica (JavaFX) — en construcción
 
 - **Punto de entrada gráfico:** `src/videojuego/ui/MainApp.java` (`extends Application`). Convive con `Main.java` (consola), que **se mantiene intacto**. Son dos vías de entrada independientes: para la consola se ejecuta `Main`, para la GUI se ejecuta `videojuego.ui.MainApp`.
-- **Estado actual (esqueleto):** solo navegación. El menú principal abre y desde él se puede entrar a las 4 pantallas (Gestión de Equipos, Configurar Partido, Simulación, Historial) y **volver al menú**. Las 4 pantallas son aún vistas mínimas (título + botón "Volver al menú"), sin lógica de negocio.
+- **Estado actual:** navegación completa + lógica funcional en todas las pantallas. Gestión de Equipos permite registrar equipos con estadio, cambiar táctica y agregar jugadores con posición desde un `ComboBox` (4 roles fijos). Configurar Partido permite elegir equipos, táctica inicial, modo, y **auto-asigna el estadio** al elegir el equipo local. Simulación muestra marcador, relato y estadísticas, permite cambiar táctica en entretiempo. Historial lista los partidos guardados.
 - **Navegación:** un único `Stage` con una única `Scene`; navegar = `escena.setRoot(...)`. El contrato está en `videojuego.ui.Navegador` (interfaz + enum `Pantalla` anidado); `MainApp` lo implementa y se lo pasa a cada controlador. La lógica (cuando llegue) seguirá pasando por la fachada `ControladorPartido` (única instancia compartida que `MainApp` crea y reparte a los controladores). **JavaFX puro, sin FXML:** cada controlador arma su vista por código en `getVista()`.
 - **Dependencia: JavaFX 21 SDK — versionado en el repo (Windows + Mac).** El proyecto es **self-contained**: clonás y compila/corre sin instalar el SDK. Como el SDK no es Java puro (trae **librerías nativas** por SO), hay **dos builds** versionados, y cada uno apunta a la carpeta de su sistema operativo:
   - `lib/javafx-sdk-21-win/` → **Windows x64** (las `.dll` nativas viven en su `bin/`).
@@ -113,6 +113,7 @@ Como el SDK se baja como jars sueltos (sin Maven/Gradle), **IntelliJ no lo detec
 3. **`simularTramo()`**: si el estado `permiteSimular()`, llama `MotorSimulacion.simularTramo(partido)` y luego `avanzarEstado()`.
    - Motor genera 3–8 eventos por tramo. Por cada uno: elige atacante/defensor al azar, `determinarEvento()` tira `random.nextDouble()` contra las probabilidades de las tácticas (las lee **en tiempo real**, evento por evento) y devuelve un `TipoEvento` (GOL, PENAL, FALTA, TARJETA_AMARILLA, TARJETA_ROJA, LESION).
    - Faltas/tarjetas se asignan a un jugador **DISPONIBLE** del defensor; el resto al atacante. Si no hay disponibles, saltea el evento.
+   - La selección del jugador es **ponderada por posición**: GOL/PENAL → peso Delantero×4, Mediocampista×2, Defensor×0.5, Arquero×0.05; FALTA/tarjetas → peso Defensor×4, Mediocampista×1.5, Delantero×0.5, Arquero×0.2; LESION → peso uniforme.
    - `partido.registrarEvento(...)` agrega al historial y notifica observadores.
 4. **Entretiempo**: `permiteSimular()==false` → solo `avanzarEstado()` a 2do tiempo (sin simular).
 5. **2do tiempo**: simula con `minutoBase` ya +45, `avanzarEstado()` → `EstadoFinalizado`.
@@ -165,7 +166,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta
 ### Pendientes
 - **B4 — `modoJuego` (amistoso/torneo) no tiene comportamiento.** Es un String que se elige y se guarda pero no afecta nada. Un "torneo" real implicaría fixture/tabla/llaves; hoy no existe.
 - **B6 — Drift de documentación.** El README nombra `ConstructorPartido` e `IObservador`, pero el código usa `PartidoBuilder` e `IObservadorPartido`. Unificar nombres.
-- **B7 — Capa `ui` y `MainApp` vacías.** Los 5 controladores `ui` son clases vacías y `MainApp` está comentado (JavaFX). Decisión tomada: **el enfoque es consola** (menú en `Main`, Tarea 6); los stubs pueden borrarse más adelante.
+- ✅ **B7 — Capa `ui`.** Los 5 controladores JavaFX tienen lógica completa. La GUI es funcional de punta a punta.
 - **B9 — Default silencioso en `determinarEvento()`.** Si no cae en ningún rango devuelve `FALTA`, lo que puede sesgar el conteo. Revisar si es intencional.
 
 ---
@@ -186,8 +187,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta
 
 1. **B4 — amistoso vs torneo con comportamiento.** Hoy `modoJuego` se elige y se guarda, pero no cambia la lógica. Un "torneo" real implicaría fixture/tabla/llaves.
 2. **B6 — Sincronizar el README.** Nombra `ConstructorPartido`/`IObservador`; el código usa `PartidoBuilder`/`IObservadorPartido`.
-3. **B7 — Stubs `ui`.** Los 5 controladores JavaFX y `MainApp` siguen vacíos; al haberse elegido el enfoque consola, pueden borrarse.
-4. **B9 — Default `FALTA` en `determinarEvento()`.** Revisar si el fallback sesga el conteo de eventos.
+3. **B9 — Default `FALTA` en `determinarEvento()`.** Revisar si el fallback sesga el conteo de eventos.
 
 ---
 
@@ -211,8 +211,11 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta
 | 4 | Cambio de táctica en tiempo real (`cambiarTactica` en fachada con guarda de finalizado) | ✅ Hecho y verificado (compila; guarda lanza `IllegalStateException` si finalizado) |
 | 5 | Mejorar historial (`mostrarHistorial`/`obtenerHistorial`/`getResumenTexto`) | ✅ Hecho y verificado (compila; resultado contado desde eventos GOL/PENAL) |
 | 6 | Menú de consola interactivo (reemplazar `Main`) — **Fase 3 (última)** | ✅ Hecho y verificado (compila + corrida end-to-end por pipe: gestión → configurar → jugar con cambio de táctica en entretiempo → historial) |
+| 7 | GUI funcional completa (Gestión, Configurar Partido, Simulación, Historial) | ✅ Hecho y verificado — todas las pantallas con lógica real a través de la fachada |
+| 8 | Roles de jugador como `ComboBox` (Delantero/Mediocampista/Defensor/Arquero) + simulación ponderada por rol | ✅ Hecho y verificado (compila; GOL→Delanteros ponderados, FALTA→Defensores ponderados) |
+| 9 | Auto-asignación de estadio al elegir equipo local en Configurar Partido | ✅ Hecho y verificado (listener en `cbLocal`; vínculo equipo→estadio persiste en `equipos.estadio_nombre`) |
 
-> **Plan completo.** Las 6 tareas (Fases 1-3) están terminadas. Lo único restante son los 4 ítems opcionales de la sección 7.
+> **Plan completo.** Las 9 tareas están terminadas. Lo único restante son los ítems opcionales de la sección 7.
 
 ---
 
@@ -240,7 +243,7 @@ Se reemplazó la persistencia en memoria por **SQLite vía JDBC**, tocando **sol
 
 ### Limitaciones aceptadas
 - El **número de camiseta** no se persiste (la tabla `jugadores` no lo tiene); al reconstruir se asigna secuencial.
-- `equipos.estadio_nombre` queda **NULL**: el modelo `Equipo` no referencia un `Estadio`.
+- `equipos.estadio_nombre` se persiste solo cuando el equipo se registra via `registrarEquipoConEstadio()` (la vía de la UI). Equipos creados por otras vías aún quedan en NULL.
 - Un jugador agregado por menú que **nunca** llega a jugar/configurar no graba su `equipo_nombre` hasta el próximo `guardar()` del equipo (en sesión sí se ve por la caché).
 - La táctica persistida es la del momento de `guardar()`; cambios de táctica en el entretiempo no se regraban (no hay `guardar()` posterior).
 

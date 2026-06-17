@@ -263,11 +263,20 @@ ControladorPartido {
 
     // Crea un equipo nuevo junto a su estadio (mismos valores por defecto que Main:
     // ciudad "Sin especificar", capacidad 0) y persiste ambos.
+    // Tambien vincula el estadio al equipo en la BD (estadio_nombre).
     public void registrarEquipoConEstadio(String nombreEquipo, String nombreEstadio) {
         Equipo equipo = new Equipo(nombreEquipo);
         Estadio estadio = new Estadio(nombreEstadio, "Sin especificar", 0);
         registrarEquipo(equipo);
         registrarEstadio(estadio);
+        new EquipoDATA().vincularEstadio(nombreEquipo, nombreEstadio);
+    }
+
+    // Devuelve el Estadio vinculado al equipo local, o null si no tiene ninguno asignado.
+    public Estadio obtenerEstadioDeEquipo(Equipo equipo) {
+        String nombreEstadio = new EquipoDATA().obtenerNombreEstadio(equipo.getNombre());
+        if (nombreEstadio == null) return null;
+        return new EstadioDATA().buscarPorNombre(nombreEstadio);
     }
 
     // Agrega un jugador al equipo indicado: autoasigna el numero de camiseta

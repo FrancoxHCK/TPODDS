@@ -86,11 +86,12 @@ public class ControladorGestionEquipos {
         // --- Zona 3: agregar jugador al equipo seleccionado ---
         TextField tfNombreJugador = new TextField();
         tfNombreJugador.setPromptText("Nombre del jugador");
-        TextField tfPosicion = new TextField();
-        tfPosicion.setPromptText("Posicion (ej: Delantero)");
+        ComboBox<String> cbPosicion = new ComboBox<>();
+        cbPosicion.getItems().setAll("Delantero", "Mediocampista", "Defensor", "Arquero");
+        cbPosicion.setPromptText("Posicion");
         Button btnAgregarJugador = new Button("Agregar jugador al equipo seleccionado");
         HBox formJugador = new HBox(10, new Label("Jugador:"), tfNombreJugador,
-                new Label("Posicion:"), tfPosicion, btnAgregarJugador);
+                new Label("Posicion:"), cbPosicion, btnAgregarJugador);
 
         // --- Mensajes y navegacion ---
         lblMensaje = new Label();
@@ -152,10 +153,14 @@ public class ControladorGestionEquipos {
                 mostrarMensaje("El nombre del jugador no puede estar vacio.");
                 return;
             }
-            String posicion = tfPosicion.getText().trim();
+            String posicion = cbPosicion.getValue();
+            if (posicion == null) {
+                mostrarMensaje("Elegi una posicion del combo.");
+                return;
+            }
             fachada.agregarJugadorAEquipo(equipo, nombre, posicion);
             tfNombreJugador.clear();
-            tfPosicion.clear();
+            cbPosicion.setValue(null);
             // Refrescamos jugadores (plantilla nueva) y equipos (cambio el contador).
             mostrarJugadores(equipo);
             listaEquipos.refresh();

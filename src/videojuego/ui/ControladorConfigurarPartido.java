@@ -45,6 +45,21 @@ public class ControladorConfigurarPartido {
         configurarComboEstadio(cbEstadio);
         cbEstadio.getItems().setAll(fachada.obtenerEstadios());
 
+        // Al seleccionar el equipo local, el estadio se auto-asigna al estadio del equipo.
+        cbLocal.valueProperty().addListener((obs, anterior, seleccionado) -> {
+            if (seleccionado != null) {
+                Estadio estadioLocal = fachada.obtenerEstadioDeEquipo(seleccionado);
+                if (estadioLocal != null) {
+                    for (Estadio e : cbEstadio.getItems()) {
+                        if (e.getNombre().equals(estadioLocal.getNombre())) {
+                            cbEstadio.setValue(e);
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
         // Combos de tacticas (opcionales) y modo. Son etiquetas de texto, no modelo.
         ComboBox<String> cbTacticaLocal = new ComboBox<>();
         ComboBox<String> cbTacticaVisitante = new ComboBox<>();

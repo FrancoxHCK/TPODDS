@@ -132,6 +132,34 @@ public class EquipoDATA {
         return obtenerOReconstruir(nombre, tactica);
     }
 
+    // Actualiza el estadio_nombre del equipo en la BD (linkea equipo con su estadio).
+    public void vincularEstadio(String nombreEquipo, String nombreEstadio) {
+        String sql = "UPDATE equipos SET estadio_nombre = ? WHERE nombre = ?";
+        try (PreparedStatement ps = conexion.prepareStatement(sql)) {
+            ps.setString(1, nombreEstadio);
+            ps.setString(2, nombreEquipo);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Error al vincular estadio al equipo: " + e.getMessage(), e);
+        }
+    }
+
+    // Devuelve el nombre del estadio vinculado al equipo, o null si no tiene.
+    public String obtenerNombreEstadio(String nombreEquipo) {
+        String sql = "SELECT estadio_nombre FROM equipos WHERE nombre = ?";
+        try (PreparedStatement ps = conexion.prepareStatement(sql)) {
+            ps.setString(1, nombreEquipo);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("estadio_nombre");
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Error al obtener estadio del equipo: " + e.getMessage(), e);
+        }
+        return null;
+    }
+
     public void eliminar(String nombre) {
         cache.remove(nombre);
         String sql = "DELETE FROM equipos WHERE nombre = ?";

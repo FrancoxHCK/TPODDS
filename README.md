@@ -21,16 +21,19 @@ desarrollado como Trabajo Práctico Obligatorio para la materia de Patrones de D
 Sistema que permite registrar equipos y jugadores, configurar partidos,
 simular eventos deportivos (goles, faltas, lesiones, penales) y consultar
 estadísticas y relato en tiempo real. La simulación es representativa:
-un motor genera eventos con lógica probabilística y los propaga a los
-módulos del sistema automáticamente.
+un motor genera eventos con lógica probabilística ponderada por la posición
+del jugador (Delantero, Mediocampista, Defensor, Arquero) y la táctica del
+equipo, propagando cada evento a los módulos del sistema automáticamente.
 
 ## Alcance del sistema
 
 Incluye:
 
 -Registro y administración de equipos, jugadores y estadios
--Configuración de partidos con selección de equipos, táctica inicial y modo de juego (amistoso / torneo)
+-Jugadores con posición fija (Delantero, Mediocampista, Defensor, Arquero) que influye en la simulación
+-Configuración de partidos con selección de equipos, táctica inicial y modo de juego (amistoso / torneo); el estadio se auto-asigna al elegir el equipo local
 -Simulación representativa de un partido completo con generación de eventos por tramos (primer tiempo, entretiempo, segundo tiempo)
+-Selección ponderada de jugadores por posición: Delanteros lideran goles, Defensores lideran faltas, Arqueros con mínima participación en ambos
 -Cambio de táctica durante el partido desde la interfaz
 -Visualización en tiempo real de marcador, relato evento por evento y estadísticas del partido
 -Persistencia de equipos, jugadores y resultados de partidos en base de datos
