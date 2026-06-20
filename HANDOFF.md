@@ -72,6 +72,20 @@ Como el SDK se baja como jars sueltos (sin Maven/Gradle), **IntelliJ no lo detec
 
 > Verificá además que el **Project SDK** del IDE sea un JDK 21+ (`Project Structure → Project`). La config del IDE es local (`.idea/`), no se comparte por git.
 
+### Fallback: si el botón Run de IntelliJ falla
+
+Si al presionar el botón verde aparece un error (p. ej. `Error occurred during initialization of boot layer` u otro error de runtime), usá los comandos de terminal como alternativa. **Siempre compilar primero**: IntelliJ guarda sus `.class` en `out/`, no en `bin/`; el comando de terminal necesita su propio `bin/`.
+
+**Windows (PowerShell) — ejecutar desde la raíz del proyecto:**
+```powershell
+Remove-Item -Recurse -Force bin -ErrorAction SilentlyContinue; New-Item -ItemType Directory bin | Out-Null
+Get-ChildItem -Recurse src -Filter *.java | Resolve-Path -Relative | Out-File -Encoding ascii sources.txt
+javac --module-path "lib\javafx-sdk-21-win\lib" --add-modules javafx.controls -cp "lib\sqlite-jdbc-3.42.0.0.jar" -d bin "@sources.txt"
+java --module-path "lib\javafx-sdk-21-win\lib" --add-modules javafx.controls -cp "bin;lib\sqlite-jdbc-3.42.0.0.jar" videojuego.ui.MainApp
+```
+
+> El `bin/` generado por terminal no se sube al repo (está en `.gitignore`), por lo que hay que compilar en cada máquina nueva.
+
 ---
 
 ## 2. Arquitectura y paquetes (`src/videojuego/`)
